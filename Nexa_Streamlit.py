@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py.
+# Nexa_Streamlit.py
 # Streamlit-native conversion of Nexa (chat + client-side voice input/output + SQLite)
 # Usage:
 #  - create requirements.txt (see instructions)
