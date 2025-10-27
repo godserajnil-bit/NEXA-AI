@@ -9,7 +9,13 @@ import sqlite3
 import os
 import re
 from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
+
+def generate_password_hash(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def check_password_hash(stored_hash, password):
+    return stored_hash == hashlib.sha256(password.encode()).hexdigest()
 import requests
 import json
 
