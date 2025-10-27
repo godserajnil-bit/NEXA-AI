@@ -260,18 +260,32 @@ def tts_component(text: str):
 # UI helpers: message bubble styles
 # ---------------------------
 def user_bubble(text: str):
+    """Render a right-aligned user chat bubble."""
     st.markdown(f"""
     <div style="display:flex;justify-content:flex-end;margin:6px 0">
-      <div style="background:linear-gradient(180deg,#bffafc,#a3f7f7);color:#001;padding:10px 14px;border-radius:12px;max-width:75%;word-wrap:break-word;">
-        {st.utils.suppress_html? text : text}
+      <div style="background:linear-gradient(180deg,#bffafc,#a3f7f7);
+                  color:#001;
+                  padding:10px 14px;
+                  border-radius:12px;
+                  max-width:75%;
+                  word-wrap:break-word;">
+        {text}
       </div>
     </div>
     """, unsafe_allow_html=True)
 
+
 def assistant_bubble(text: str):
+    """Render a left-aligned assistant chat bubble."""
     st.markdown(f"""
     <div style="display:flex;justify-content:flex-start;margin:6px 0">
-      <div style="background:rgba(255,255,255,0.03);color:#e8f9ff;padding:10px 14px;border-radius:12px;max-width:75%;word-wrap:break-word;border-left:3px solid rgba(0,255,255,0.08);">
+      <div style="background:rgba(255,255,255,0.05);
+                  color:#e8f9ff;
+                  padding:10px 14px;
+                  border-radius:12px;
+                  max-width:75%;
+                  word-wrap:break-word;
+                  border-left:3px solid rgba(0,255,255,0.15);">
         {text}
       </div>
     </div>
