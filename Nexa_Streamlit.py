@@ -212,7 +212,7 @@ def login_panel():
         if st.sidebar.button("Login"):
             if verify_user(username, password):
                 st.session_state.user = username
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.sidebar.error("Invalid credentials")
 
