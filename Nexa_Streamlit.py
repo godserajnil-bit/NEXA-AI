@@ -28,7 +28,7 @@ def get_ai_reply(prompt, persona="Neutral"):
     }
 
     data = {
-        "model": "gpt-3.5-turbo",  # or try "gpt-4o-mini"
+        "model": "openai/gpt-3.5-turbo",  # ✅ OpenRouter requires vendor prefix
         "messages": [
             {"role": "system", "content": f"You are a {persona} assistant."},
             {"role": "user", "content": prompt},
@@ -41,11 +41,14 @@ def get_ai_reply(prompt, persona="Neutral"):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            json=data
+            json=data,
+            timeout=30
         )
         response.raise_for_status()
         result = response.json()
         return result["choices"][0]["message"]["content"].strip()
+    except requests.exceptions.RequestException as e:
+        return f"⚠️ OpenRouter network error: {e}"
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
