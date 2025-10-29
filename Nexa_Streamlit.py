@@ -346,15 +346,29 @@ with st.sidebar:
         st.markdown("---")
         st.markdown("### Conversations")
     
-                           # delete conversation (simple)
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
-        cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
-        conn.commit()
-        conn.close()
-        st.rerun()
+                        # --- Conversation Management ---
+st.markdown("### Conversations")
 
+conversations = get_conversations(st.session_state.user)
+
+if conversations:
+    for c in conversations:
+        st.write(f"🗂️ Conversation ID: {c['id']} — Created: {c['created_at']}")
+
+        # Delete button for each conversation
+        if st.button(f"🗑️ Delete {c['id']}", key=f"del_{c['id']}"):
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
+            cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
+            conn.commit()
+            conn.close()
+            st.success(f"✅ Conversation {c['id']} deleted")
+            st.rerun()
+else:
+    st.info("No conversations found yet.")
+
+    
     st.markdown("---")
     # persona
     st.markdown("### Persona")
