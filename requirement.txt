@@ -1,9 +1,5 @@
-streamlit==1.50.0
+streamlit==1.39.0
 requests
-pandas
-numpy
-openai
-gtts
-SpeechRecognition
-pyaudio
 sqlite3-binary
+Pillow
+python-dotenv
