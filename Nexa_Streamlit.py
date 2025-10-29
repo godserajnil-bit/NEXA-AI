@@ -13,6 +13,36 @@ from datetime import datetime
 from pathlib import Path
 import streamlit as st
 
+# --- AI Reply Function ---
+def get_ai_reply(prompt, persona="Neutral"):
+    """Fetch an AI-generated reply from OpenRouter."""
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        return "⚠️ Missing OpenRouter API key. Please set OPENROUTER_API_KEY in your environment."
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {"role": "system", "content": f"You are a {persona} assistant."},
+            {"role": "user", "content": prompt},
+        ],
+    }
+
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠️ OpenRouter error: {e}"
+
 # ---------------------------
 # Configuration
 # ---------------------------
