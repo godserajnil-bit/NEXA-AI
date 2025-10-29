@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 import streamlit as st
 
-# --- AI Reply Function ---
+# --- AI Reply Function (Final, Tested) ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
     api_key = os.getenv("OPENROUTER_API_KEY")
@@ -22,19 +22,19 @@ def get_ai_reply(prompt, persona="Neutral"):
 
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "http://localhost:8501/",
-        "X-Title": "Nexa AI",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://nexa-ai.streamlit.app/",
+        "X-Title": "Nexa AI",
     }
 
     data = {
-        "model": "openai/gpt-3.5-turbo",  # ✅ OpenRouter requires vendor prefix
+        "model": "meta-llama/llama-3.1-70b-instruct",  # ✅ this model works perfectly
         "messages": [
             {"role": "system", "content": f"You are a {persona} assistant."},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
-        "max_tokens": 500,
+        "max_tokens": 400,
     }
 
     try:
@@ -44,11 +44,9 @@ def get_ai_reply(prompt, persona="Neutral"):
             json=data,
             timeout=30
         )
-        response.raise_for_status()
-        result = response.json()
-        return result["choices"][0]["message"]["content"].strip()
-    except requests.exceptions.RequestException as e:
-        return f"⚠️ OpenRouter network error: {e}"
+        if response.status_code != 200:
+            return f"⚠️ API Error {response.status_code}: {response.text}"
+        return response.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
