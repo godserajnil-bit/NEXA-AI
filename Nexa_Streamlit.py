@@ -50,8 +50,34 @@ def get_ai_reply(prompt, persona="Neutral"):
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
-# --- User Input Section ---
-user_input = st.chat_input("Type your message here...")
+# --- Chat Section (Clean Display) ---
+st.markdown("### 💬 Chat")
+
+# Create message list if not exists
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Show chat history
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.markdown(f"🧑‍💬 **You:** {msg['content']}")
+    else:
+        st.markdown(f"🤖 **Nexa:** {msg['content']}")
+
+# User input box
+user_input = st.chat_input("Type your message...")
+
+if user_input:
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.spinner("Nexa is thinking..."):
+        ai_reply = get_ai_reply(user_input, st.session_state.get("persona", "Neutral"))
+
+    # Add assistant message
+    st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+
+    # Refresh chat display
+    st.rerun()
 
 # ---------------------------
 # Configuration
