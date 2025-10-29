@@ -359,7 +359,16 @@ else:
                 except Exception as e:
                     assistant_reply = f"(LLM error) {e}"
 
-             # Save assistant reply safely
+# --- Get AI reply from API ---
+try:
+    assistant_reply = get_ai_reply(user_input, st.session_state.persona)
+except Exception as e:
+    assistant_reply = f"⚠️ Error fetching AI reply: {e}"
+
+# Show assistant reply in chat
+st.chat_message("assistant").markdown(assistant_reply)
+
+  # Save assistant reply safely
 if "assistant_reply" in locals() and assistant_reply:
     save_message(
         st.session_state.conv_id,
@@ -369,8 +378,6 @@ if "assistant_reply" in locals() and assistant_reply:
         None
     )
     st.rerun()
-else:
-    st.warning("⚠️ Assistant reply not available to save yet.")
 
 # --- Main layout: Chat (left) and Info (right) ---
 left_col, right_col = st.columns([3, 1])
