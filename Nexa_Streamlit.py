@@ -266,7 +266,7 @@ if st.button("Logout"):
     st.session_state.user = None
     st.session_state.conv_id = None
     st.rerun()
-st.markdown("--)
+st.markdown("--")
             # --- User Logged In Section ---
 else:
     st.markdown(f"**Logged in:** {st.session_state.user}")
