@@ -345,11 +345,29 @@ with st.sidebar:
 
         st.markdown("---")
         st.markdown("### Conversations")
-    
+
+# --- Fetch Conversations from Database ---
+def get_conversations(user_id=None):
+    """Fetch all conversations (optionally filtered by user)."""
+    conn = get_conn()
+    cur = conn.cursor()
+
+    if user_id:
+        cur.execute(
+            "SELECT id, created_at FROM conversations WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,),
+        )
+    else:
+        cur.execute("SELECT id, created_at FROM conversations ORDER BY created_at DESC")
+
+    rows = cur.fetchall()
+    conn.close()
+    return [{"id": r[0], "created_at": r[1]} for r in rows]
+
                         # --- Conversation Management ---
 st.markdown("### Conversations")
 
-conversations = get_conversations(st.session_state.user)
+conversations = get_conversations()
 
 if conversations:
     for c in conversations:
