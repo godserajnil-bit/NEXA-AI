@@ -22,14 +22,19 @@ def get_ai_reply(prompt, persona="Neutral"):
 
     headers = {
         "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "http://localhost:8501/",
+        "X-Title": "Nexa AI",
         "Content-Type": "application/json",
     }
+
     data = {
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-3.5-turbo",  # or try "gpt-4o-mini"
         "messages": [
             {"role": "system", "content": f"You are a {persona} assistant."},
             {"role": "user", "content": prompt},
         ],
+        "temperature": 0.7,
+        "max_tokens": 500,
     }
 
     try:
@@ -39,7 +44,8 @@ def get_ai_reply(prompt, persona="Neutral"):
             json=data
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        result = response.json()
+        return result["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
