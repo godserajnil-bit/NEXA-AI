@@ -29,7 +29,7 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # API key placeholders (kept blank if you don't want to call external APIs)
-OPENROUTER_API_KEY = "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"   # <- add your openrouter / openai key here for LLM integration
+OPENROUTER_API_KEY = "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"   # <- add your openrouter / openai key here for LLM integration
 GNEWS_API_KEY = "38bcd24319a1b6111822f07fa5fc3bc8"        # <- optional GNews key
 
 MODEL = "gpt-4o-mini"     # placeholder
@@ -839,3 +839,4 @@ if __name__ == "__main__":
     try: webbrowser.open("http://127.0.0.1:5000")
     except: pass
     app.run(host="0.0.0.0", port=5000, debug=True)
+
