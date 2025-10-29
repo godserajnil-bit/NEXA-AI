@@ -43,6 +43,9 @@ def get_ai_reply(prompt, persona="Neutral"):
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
+# --- User Input Section ---
+user_input = st.chat_input("Type your message here...")
+
 # ---------------------------
 # Configuration
 # ---------------------------
