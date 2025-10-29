@@ -364,7 +364,8 @@ save_message(st.session_state.conv_id, "assistant", "assistant", assistant_reply
 # rerender messages
 st.rerun()
 
-   left_col, right_col = st.columns([3, 1])
+# --- Main layout: Chat (left) and Info (right) ---
+left_col, right_col = st.columns([3, 1])
 
 with left_col:
     st.markdown("### Chat")
