@@ -13,6 +13,48 @@ from datetime import datetime
 from pathlib import Path
 import streamlit as st
 
+# --- Initialize Database ---
+def init_db():
+    conn = sqlite3.connect("nexa.db")
+    cur = conn.cursor()
+
+    # Create users table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT
+        )
+    """)
+
+    # Create conversations table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Create messages table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER,
+            sender TEXT,
+            role TEXT,
+            content TEXT,
+            image BLOB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+# ✅ Call it right after defining
+init_db()  # Ensures all tables exist before the app starts
+
 # --- AI Reply Function (Final, Tested) ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
