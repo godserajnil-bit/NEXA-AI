@@ -262,7 +262,7 @@ with st.sidebar:
         st.caption("App uses an environment OpenRouter API key for AI replies.")
     else:
         st.markdown(f"**Logged in:** {st.session_state.user}")
-        if st.button("Logout"):
+if st.button("Logout"):
     st.session_state.user = None
     st.session_state.conv_id = None
     st.rerun()
