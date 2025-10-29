@@ -280,22 +280,31 @@ with st.sidebar:
         st.markdown("---")
         st.markdown("### Conversations")
     
-                    # delete conversation (simple)
-                   conn = get_conn(); cur = conn.cursor()
-cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
-cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
-conn.commit(); conn.close()
-st.rerun()
-st.markdown("---")
-        # persona
-        st.markdown("### Persona")
-        p = st.selectbox("Choose assistant style", ["Friendly", "Neutral", "Cheerful", "Professional"], index=["Friendly","Neutral","Cheerful","Professional"].index(st.session_state.persona), key="persona_select")
-        st.session_state.persona = p
-        st.markdown("---")
-        # NEW conversation
-      if st.button("New chat (clear view)"):
-    st.session_state.conv_id = create_conversation(st.session_state.user)
-    st.rerun()
+                           # delete conversation (simple)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
+        cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
+        conn.commit()
+        conn.close()
+        st.rerun()
+
+    st.markdown("---")
+    # persona
+    st.markdown("### Persona")
+    p = st.selectbox(
+        "Choose assistant style",
+        ["Friendly", "Neutral", "Cheerful", "Professional"],
+        index=["Friendly", "Neutral", "Cheerful", "Professional"].index(st.session_state.persona),
+        key="persona_select"
+    )
+    st.session_state.persona = p
+    st.markdown("---")
+
+    # NEW conversation
+    if st.button("New chat (clear view)"):
+        st.session_state.conv_id = create_conversation(st.session_state.user)
+        st.rerun()
 
 # --- Main UI ---
 if not st.session_state.user:
