@@ -266,22 +266,19 @@ if st.button("Logout"):
     st.session_state.user = None
     st.session_state.conv_id = None
     st.rerun()
-st.markdown("---")
-        # Conversations list
-        st.markdown("### Conversations")
-        convs = list_conversations(st.session_state.user)
-        if not convs:
-            if st.button("New conversation"):
-                st.session_state.conv_id = create_conversation(st.session_state.user)
-                convs = list_conversations(st.session_state.user)
-        for c in convs:
-            # offerings: show title and clickable button to open
-            col1, col2 = st.columns([0.85, 0.15])
-            with col1:
-                if st.button(c["title"] or "New chat", key=f"open_{c['id']}"):
-                    st.session_state.conv_id = c["id"]
-            with col2:
-                if st.button("✖", key=f"del_{c['id']}"):
+st.markdown("--)
+            # --- User Logged In Section ---
+else:
+    st.markdown(f"**Logged in:** {st.session_state.user}")
+
+    if st.button("Logout"):
+        st.session_state.user = None
+        st.session_state.conv_id = None
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Conversations")
+    
                     # delete conversation (simple)
                    conn = get_conn(); cur = conn.cursor()
 cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
