@@ -232,49 +232,53 @@ if "persona" not in st.session_state:
 # --- Sidebar: login/register or actions ---
 with st.sidebar:
     st.markdown("## Nexa — Assistant")
+
+    # If user not logged in
     if not st.session_state.user:
         st.markdown("### Login")
         username = st.text_input("Username", key="login_user")
         password = st.text_input("Password", type="password", key="login_pw")
+
         if st.button("Login"):
             if verify_user(username, password):
                 st.session_state.user = username
                 st.success(f"Logged in as {username}")
-               # create default conversation if none
-if st.session_state.conv_id is None:
-    st.session_state.conv_id = create_conversation(username)
-else:
-    st.error("Invalid credentials")
+                # create default conversation if none
+                if st.session_state.conv_id is None:
+                    st.session_state.conv_id = create_conversation(username)
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
-st.markdown("---")
-st.markdown("### Register")
-r_user = st.text_input("New username", key="reg_user")
-r_pw = st.text_input("New password", type="password", key="reg_pw")
+        st.markdown("---")
+        st.markdown("### Register")
+        r_user = st.text_input("New username", key="reg_user")
+        r_pw = st.text_input("New password", type="password", key="reg_pw")
 
-if st.button("Register"):
-    if not r_user or not r_pw:
-        st.warning("Provide both username and password")
+        if st.button("Register"):
+            if not r_user or not r_pw:
+                st.warning("Provide both username and password")
+            else:
+                try:
+                    create_user(r_user, r_pw)
+                    st.success("Registered. You can now login.")
+                except Exception as e:
+                    st.error(f"Could not register: {e}")
+
+        st.markdown("---")
+        st.caption("App uses an environment OpenRouter API key for AI replies.")
+
+    # --- User Logged In Section ---
     else:
-        try:
-            create_user(r_user, r_pw)
-            st.success("Registered. You can now login.")
-        except Exception as e:
-            st.error(f"Could not register: {e}")
+        st.markdown(f"**Logged in:** {st.session_state.user}")
 
-st.markdown("---")
-st.caption("App uses an environment OpenRouter API key for AI replies.")
+        if st.button("Logout"):
+            st.session_state.user = None
+            st.session_state.conv_id = None
+            st.rerun()
 
-# --- User Logged In Section ---
-else:
-    st.markdown(f"**Logged in:** {st.session_state.user}")
-
-    if st.button("Logout"):
-        st.session_state.user = None
-        st.session_state.conv_id = None
-        st.rerun()
-
-    st.markdown("---")
-    st.markdown("### Conversations")
+        st.markdown("---")
+        st.markdown("### Conversations")
     
                     # delete conversation (simple)
                    conn = get_conn(); cur = conn.cursor()
