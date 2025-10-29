@@ -359,10 +359,18 @@ else:
                 except Exception as e:
                     assistant_reply = f"(LLM error) {e}"
 
-              # Save assistant reply
-save_message(st.session_state.conv_id, "assistant", "assistant", assistant_reply, None)
-# rerender messages
-st.rerun()
+             # Save assistant reply safely
+if "assistant_reply" in locals() and assistant_reply:
+    save_message(
+        st.session_state.conv_id,
+        "assistant",
+        "assistant",
+        assistant_reply,
+        None
+    )
+    st.rerun()
+else:
+    st.warning("⚠️ Assistant reply not available to save yet.")
 
 # --- Main layout: Chat (left) and Info (right) ---
 left_col, right_col = st.columns([3, 1])
