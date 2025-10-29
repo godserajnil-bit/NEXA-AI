@@ -364,15 +364,23 @@ save_message(st.session_state.conv_id, "assistant", "assistant", assistant_reply
 # rerender messages
 st.rerun()
 
-    with right_col:
-        st.markdown("### Info")
-        st.markdown(f"**User:** {st.session_state.user}")
-        st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
-        st.markdown(f"**Persona:** {st.session_state.persona}")
-        st.markdown("---")
-        st.markdown("### Tips")
-        st.markdown("- Use `news: topic` to fetch news (if GNews key configured).")
-        st.markdown("- Upload images to show them in chat.")
-        st.markdown("---")
-        st.markdown("### App")
-        st.markdown("This app uses OpenRouter for AI replies. Make sure `OPENROUTER_API_KEY` is set in your environment.")
+   left_col, right_col = st.columns([3, 1])
+
+with left_col:
+    st.markdown("### Chat")
+    # (Your chat input/output section goes here)
+
+with right_col:
+    st.markdown("### Info")
+    st.markdown(f"**User:** {st.session_state.user}")
+    st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
+    st.markdown(f"**Persona:** {st.session_state.persona}")
+    st.markdown("---")
+    st.markdown("### Tips")
+    st.markdown("- Use `news: topic` to fetch news (if GNews key configured).")
+    st.markdown("- Upload images to show them in chat.")
+    st.markdown("---")
+    st.markdown("### App")
+    st.markdown(
+        "This app uses OpenRouter for AI replies. Make sure `OPENROUTER_API_KEY` is set in your environment."
+    )
