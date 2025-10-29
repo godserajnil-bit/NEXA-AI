@@ -240,34 +240,31 @@ with st.sidebar:
             if verify_user(username, password):
                 st.session_state.user = username
                 st.success(f"Logged in as {username}")
-                # create default conversation if none
-                if st.session_state.conv_id is None:
-                    st.session_state.conv_id = create_conversation(username)
-            else:
-                st.error("Invalid credentials")
-        st.markdown("---")
-        st.markdown("### Register")
-        r_user = st.text_input("New username", key="reg_user")
-        r_pw = st.text_input("New password", type="password", key="reg_pw")
-        if st.button("Register"):
-            if not r_user or not r_pw:
-                st.warning("Provide both username and password")
-            else:
-                try:
-                    create_user(r_user, r_pw)
-                    st.success("Registered. You can now login.")
-                except Exception as e:
-                    st.error(f"Could not register: {e}")
-        st.markdown("---")
-        st.caption("App uses an environment OpenRouter API key for AI replies.")
+               # create default conversation if none
+if st.session_state.conv_id is None:
+    st.session_state.conv_id = create_conversation(username)
+else:
+    st.error("Invalid credentials")
+
+st.markdown("---")
+st.markdown("### Register")
+r_user = st.text_input("New username", key="reg_user")
+r_pw = st.text_input("New password", type="password", key="reg_pw")
+
+if st.button("Register"):
+    if not r_user or not r_pw:
+        st.warning("Provide both username and password")
     else:
-        st.markdown(f"**Logged in:** {st.session_state.user}")
-if st.button("Logout"):
-    st.session_state.user = None
-    st.session_state.conv_id = None
-    st.rerun()
-st.markdown("--")
-            # --- User Logged In Section ---
+        try:
+            create_user(r_user, r_pw)
+            st.success("Registered. You can now login.")
+        except Exception as e:
+            st.error(f"Could not register: {e}")
+
+st.markdown("---")
+st.caption("App uses an environment OpenRouter API key for AI replies.")
+
+# --- User Logged In Section ---
 else:
     st.markdown(f"**Logged in:** {st.session_state.user}")
 
