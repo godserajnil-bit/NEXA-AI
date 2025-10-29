@@ -15,7 +15,7 @@ import streamlit as st
 
 # --- Initialize Database ---
 def init_db():
-    conn = sqlite3.connect("nexa.db")
+    conn = sqlite3.connect("nexa.db")  # ✅ correct
     cur = conn.cursor()
 
     # Create users table
@@ -51,6 +51,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+
 
 # ✅ Call it right after defining
 init_db()  # Ensures all tables exist before the app starts
