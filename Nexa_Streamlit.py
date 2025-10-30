@@ -309,8 +309,10 @@ def render_chat_messages(messages):
                 st.markdown(meta, unsafe_allow_html=True)
                 if content:
                     escaped_content = st.escape(content).replace("\n", "<br/>")
-                    st.markdown(f"<div class='bubble-ai'>{escaped_content}</div>", unsafe_allow_html=True)
-                if image_path:
+st.markdown(f"<div class='bubble-ai'>{escaped_content}</div>", unsafe_allow_html=True)
+
+if image_path:
+    st.image(image_path, use_container_width=True)
                     try:
                         st.image(str(image_path), width=360)
                     except Exception:
