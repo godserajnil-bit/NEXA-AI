@@ -320,7 +320,9 @@ if image_path:
             else:
                 st.markdown(meta, unsafe_allow_html=True)
                 if content:
-                    st.markdown(f"<div class='bubble-user'>{st.escape(content).replace('\\n','<br/>')}</div>", unsafe_allow_html=True)
+                    # user message bubble
+escaped_content = st.escape(content).replace("\n", "<br/>")
+st.markdown(f"<div class='bubble-user'>{escaped_content}</div>", unsafe_allow_html=True)
                 if image_path:
                     try:
                         st.image(str(image_path), width=360)
