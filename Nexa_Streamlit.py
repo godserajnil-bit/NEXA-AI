@@ -308,11 +308,7 @@ def render_chat_messages(messages):
             meta = f"<div class='meta'>{sender} • {ts}</div>"
             st.markdown(meta, unsafe_allow_html=True)
 
-            if role == "assistant":
-               safe_content = content.replace("\n", "<br/>")
-st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
-                 
-               if role == "assistant":
+ if role == "assistant":
     safe_content = content.replace("\n", "<br/>")
     st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
