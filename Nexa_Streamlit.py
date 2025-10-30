@@ -294,7 +294,7 @@ def local_css():
     )
 
 def render_chat_messages(messages):
-    # messages: list of dicts with fields sender, role, content, image_path
+    """Render the chat messages in nice styled bubbles."""
     container = st.container()
     with container:
         st.markdown('<div class="chat-box">', unsafe_allow_html=True)
@@ -305,12 +305,33 @@ def render_chat_messages(messages):
             image_path = m.get("image_path", None)
             ts = m.get("timestamp", "")
             meta = f"<div class='meta'>{sender} • {ts}</div>"
-            if role == "assistant":
-                st.markdown(meta, unsafe_allow_html=True)
-                if content:
-                    escaped_content = st.escape(content).replace("\n", "<br/>")
-st.markdown(f"<div class='bubble-ai'>{escaped_content}</div>", unsafe_allow_html=True)
+            st.markdown(meta, unsafe_allow_html=True)
 
+            if role == "assistant":
+                st.markdown(
+                    f"<div class='bubble-ai'>{content.replace('\\n', '<br/>')}</div>",
+                    unsafe_allow_html=True
+                )
+                if image_path:
+                    try:
+                        from PIL import Image
+                        image = Image.open(image_path)
+                        st.image(image, caption="AI Response Image", use_column_width=True)
+                    except Exception as e:
+                        st.warning(f"Could not load image: {e}")
+
+            elif role == "user":
+                st.markdown(
+                    f"<div class='bubble-user'>{content.replace('\\n', '<br/>')}</div>",
+                    unsafe_allow_html=True
+                )
+                if image_path:
+                    try:
+                        st.image(str(image_path), width=360)
+                    except Exception:
+                        pass
+
+        st.markdown('</div>', unsafe_allow_html=True)
 # --- Display assistant message ---
 if role == "assistant":
     st.markdown(f"<div class='bubble-ai'>{content.replace('\\n', '<br/>')}</div>", unsafe_allow_html=True)
