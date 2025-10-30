@@ -308,7 +308,7 @@ def render_chat_messages(messages):
             meta = f"<div class='meta'>{sender} • {ts}</div>"
             st.markdown(meta, unsafe_allow_html=True)
 
- if role == "assistant":
+if role == "assistant":
     safe_content = content.replace("\n", "<br/>")
     st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
@@ -320,17 +320,18 @@ def render_chat_messages(messages):
         except Exception as e:
             st.warning(f"Could not load image: {e}")
 
-           elif role == "user":
+elif role == "user":
     safe_content = content.replace("\n", "<br/>")
     st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
 
-                if image_path:
-                    try:
-                        st.image(str(image_path), width=360)
-                    except Exception:
-                        pass
+    if image_path:
+        try:
+            st.image(str(image_path), width=360)
+        except Exception:
+            pass
 
-        st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
 # --- Display assistant message ---
 if role == "assistant":
     safe_content = content.replace("\n", "<br/>")
