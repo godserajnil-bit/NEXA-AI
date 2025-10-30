@@ -14,6 +14,10 @@ from pathlib import Path
 import streamlit as st
 import html
 from PIL import Image
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
 
 # --- Initialize Database ---
 def init_db():
