@@ -345,29 +345,37 @@ if role == "assistant":
         except Exception as e:
             st.warning(f"Could not load image: {e}")
 
-# --- Display chat messages ---
-if role == "assistant":
-    safe_content = html.escape(content).replace("\n", "<br/>")
-    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
+# --- Render Chat Messages ---
+def render_chat_messages(messages):
+    """Display chat messages in styled bubbles."""
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        image_path = msg.get("image_path", None)
 
-    if image_path:
-        try:
-            image = Image.open(image_path)
-            st.image(image, caption="AI Response Image", use_column_width=True)
-        except Exception as e:
-            st.warning(f"Could not load image: {e}")
+        if role == "assistant":
+            safe_content = html.escape(content).replace("\n", "<br/>")
+            st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
-elif role == "user":
-    safe_content = html.escape(content).replace("\n", "<br/>")
-    st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
+            if image_path:
+                try:
+                    from PIL import Image
+                    image = Image.open(image_path)
+                    st.image(image, caption="AI Response Image", use_column_width=True)
+                except Exception as e:
+                    st.warning(f"Could not load image: {e}")
 
-    if image_path:
-        try:
-            st.image(str(image_path), width=360)
-        except Exception:
-            pass
+        elif role == "user":
+            safe_content = html.escape(content).replace("\n", "<br/>")
+            st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+            if image_path:
+                try:
+                    st.image(str(image_path), width=360)
+                except Exception:
+                    pass
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
 # Streamlit App
