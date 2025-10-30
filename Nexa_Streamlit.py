@@ -11,13 +11,24 @@ import requests
 import tempfile
 from datetime import datetime
 from pathlib import Path
-import streamlit as st
 import html
 from PIL import Image
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
+
+import streamlit as st
+# (and any other imports below this)
+
 st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
+local_css()
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "conv_id" not in st.session_state:
+    st.session_state.conv_id = None
+if "persona" not in st.session_state:
+    st.session_state.persona = "Friendly"
 
 # --- Initialize Database ---
 def init_db():
@@ -339,19 +350,6 @@ def render_chat_messages(messages):
                         pass
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-# ---------------------------
-# Streamlit App
-# ---------------------------
-st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
-local_css()
-
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "conv_id" not in st.session_state:
-    st.session_state.conv_id = None
-if "persona" not in st.session_state:
-    st.session_state.persona = "Friendly"
 
 # --- Sidebar: login/register or actions ---
 with st.sidebar:
