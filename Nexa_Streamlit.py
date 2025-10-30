@@ -296,86 +296,45 @@ def local_css():
     )
 
 def render_chat_messages(messages):
-    """Render the chat messages in nice styled bubbles."""
+    """Display chat messages in styled bubbles."""
     container = st.container()
     with container:
         st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-        for m in messages:
-            role = m.get("role", "user")
-            sender = m.get("sender", "")
-            content = m.get("content", "") or ""
-            image_path = m.get("image_path", None)
-            ts = m.get("timestamp", "")
+
+        for msg in messages:
+            role = msg.get("role", "")
+            sender = msg.get("sender", "")
+            content = msg.get("content", "") or ""
+            image_path = msg.get("image_path", None)
+            ts = msg.get("timestamp", "")
+
+            # Show metadata
             meta = f"<div class='meta'>{sender} • {ts}</div>"
             st.markdown(meta, unsafe_allow_html=True)
 
-if role == "assistant":
-    safe_content = content.replace("\n", "<br/>")
-    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
+            # Render message based on role
+            if role == "assistant":
+                safe_content = html.escape(content).replace("\n", "<br/>")
+                st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
-    if image_path:
-        try:
-            from PIL import Image
-            image = Image.open(image_path)
-            st.image(image, caption="AI Response Image", use_column_width=True)
-        except Exception as e:
-            st.warning(f"Could not load image: {e}")
+                if image_path:
+                    try:
+                        image = Image.open(image_path)
+                        st.image(image, caption="AI Response Image", use_column_width=True)
+                    except Exception as e:
+                        st.warning(f"Could not load image: {e}")
 
-elif role == "user":
-    safe_content = content.replace("\n", "<br/>")
-    st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
+            elif role == "user":
+                safe_content = html.escape(content).replace("\n", "<br/>")
+                st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
 
-    if image_path:
-        try:
-            st.image(str(image_path), width=360)
-        except Exception:
-            pass
+                if image_path:
+                    try:
+                        st.image(str(image_path), width=360)
+                    except Exception:
+                        pass
 
-st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Display assistant message ---
-if role == "assistant":
-    safe_content = content.replace("\n", "<br/>")
-    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
-
-    if image_path:
-        try:
-            image = Image.open(image_path)
-            st.image(image, caption="AI Response Image", use_column_width=True)
-        except Exception as e:
-            st.warning(f"Could not load image: {e}")
-
-# --- Render Chat Messages ---
-def render_chat_messages(messages):
-    """Display chat messages in styled bubbles."""
-    for msg in messages:
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        image_path = msg.get("image_path", None)
-
-        if role == "assistant":
-            safe_content = html.escape(content).replace("\n", "<br/>")
-            st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
-
-            if image_path:
-                try:
-                    from PIL import Image
-                    image = Image.open(image_path)
-                    st.image(image, caption="AI Response Image", use_column_width=True)
-                except Exception as e:
-                    st.warning(f"Could not load image: {e}")
-
-        elif role == "user":
-            safe_content = html.escape(content).replace("\n", "<br/>")
-            st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
-
-            if image_path:
-                try:
-                    st.image(str(image_path), width=360)
-                except Exception:
-                    pass
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
 # Streamlit App
@@ -497,22 +456,32 @@ if not st.session_state.user:
         "<p class='small'>Please login or register in the sidebar to start.</p></div>",
         unsafe_allow_html=True
     )
+
 else:
     left_col, right_col = st.columns([3, 1])
     with left_col:
         st.markdown("### Chat")
 
-        # load messages for current conversation
+        # Ensure conversation ID exists
         if not st.session_state.conv_id:
             st.session_state.conv_id = create_conversation(st.session_state.user)
 
+        # Load and render previous messages
         messages = load_messages(st.session_state.conv_id)
-        render_chat_messages(messages)
+        render_chat_messages(messages)  # <-- your new message renderer
 
-        # input area
+        # Input area
         with st.form("chat_input_form", clear_on_submit=False):
-            user_text = st.text_area("Message", key="user_msg", height=80, placeholder="Ask Nexa anything...")
-            uploaded_file = st.file_uploader("Attach image (optional)", type=["png", "jpg", "jpeg", "gif"])
+            user_text = st.text_area(
+                "Message",
+                key="user_msg",
+                height=80,
+                placeholder="Ask Nexa anything..."
+            )
+            uploaded_file = st.file_uploader(
+                "Attach image (optional)",
+                type=["png", "jpg", "jpeg", "gif"]
+            )
             submit = st.form_submit_button("Send")
 
             if submit:
@@ -525,14 +494,27 @@ else:
                     fpath.write_bytes(uploaded_file.read())
                     img_path = str(fpath)
 
-                save_message(st.session_state.conv_id, st.session_state.user, "user", user_text or None, img_path)
+                save_message(
+                    st.session_state.conv_id,
+                    st.session_state.user,
+                    "user",
+                    user_text or None,
+                    img_path
+                )
 
                 if user_text:
-                    rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text, max_words=5))
+                    rename_conversation_if_default(
+                        st.session_state.conv_id,
+                        simple_main_motive(user_text, max_words=5)
+                    )
 
+                # Prepare messages for LLM
                 history = load_messages(st.session_state.conv_id)
                 payload_messages = [
-                    {"role": "system", "content": f"You are Nexa, a helpful assistant. Persona: {st.session_state.persona}."}
+                    {
+                        "role": "system",
+                        "content": f"You are Nexa, a helpful assistant. Persona: {st.session_state.persona}."
+                    }
                 ]
                 for m in history:
                     role = "assistant" if m["role"] == "assistant" else "user"
@@ -541,6 +523,7 @@ else:
 
                 payload_messages.append({"role": "user", "content": user_text or ""})
 
+                # Generate assistant reply
                 assistant_reply = ""
                 try:
                     with st.spinner("Thinking..."):
@@ -552,6 +535,7 @@ else:
                     save_message(st.session_state.conv_id, "assistant", "assistant", assistant_reply, None)
                     st.rerun()
 
+    # Sidebar info
     with right_col:
         st.markdown("### Info")
         st.markdown(f"**User:** {st.session_state.user}")
@@ -563,4 +547,7 @@ else:
         st.markdown("- Upload images to show them in chat.")
         st.markdown("---")
         st.markdown("### App")
-        st.markdown("This app uses OpenRouter for AI replies. Make sure `OPENROUTER_API_KEY` is set in your environment.")
+        st.markdown(
+            "This app uses OpenRouter for AI replies. "
+            "Make sure `OPENROUTER_API_KEY` is set in your environment."
+        )
