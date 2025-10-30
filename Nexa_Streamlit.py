@@ -311,17 +311,20 @@ def render_chat_messages(messages):
                     escaped_content = st.escape(content).replace("\n", "<br/>")
 st.markdown(f"<div class='bubble-ai'>{escaped_content}</div>", unsafe_allow_html=True)
 
-if image_path:
-    st.image(image_path, use_container_width=True)
-     if image_path:
+# --- Display assistant message ---
+if role == "assistant":
+    st.markdown(f"<div class='bubble-ai'>{content.replace('\\n', '<br/>')}</div>", unsafe_allow_html=True)
+
+    if image_path:
         try:
             image = Image.open(image_path)
-                        st.image(str(image_path), width=360)
-                    except Exception:
-                        pass
-            else:
-                st.markdown(meta, unsafe_allow_html=True)
-                if content:
+            st.image(image, caption="AI Response Image", use_column_width=True)
+        except Exception as e:
+            st.warning(f"Could not load image: {e}")
+
+# --- Display user message ---
+elif role == "user":
+    st.markdown(f"<div class='bubble-user'>{content.replace('\\n', '<br/>')}</div>", unsafe_allow_html=True)
                     # user message bubble
 escaped_content = st.escape(content).replace("\n", "<br/>")
 st.markdown(f"<div class='bubble-user'>{escaped_content}</div>", unsafe_allow_html=True)
