@@ -313,7 +313,9 @@ st.markdown(f"<div class='bubble-ai'>{escaped_content}</div>", unsafe_allow_html
 
 if image_path:
     st.image(image_path, use_container_width=True)
-                    try:
+     if image_path:
+        try:
+            image = Image.open(image_path)
                         st.image(str(image_path), width=360)
                     except Exception:
                         pass
