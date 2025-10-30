@@ -308,7 +308,8 @@ def render_chat_messages(messages):
             if role == "assistant":
                 st.markdown(meta, unsafe_allow_html=True)
                 if content:
-                    st.markdown(f"<div class='bubble-ai'>{st.escape(content).replace('\\n','<br/>')}</div>", unsafe_allow_html=True)
+                    escaped = st.escape(content).replace("\n", "<br/>")
+st.markdown(f"<div class='bubble-ai'>{escaped}</div>", unsafe_allow_html=True)
                 if image_path:
                     try:
                         st.image(str(image_path), width=360)
