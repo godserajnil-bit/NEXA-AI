@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 import streamlit as st
 import html
+from PIL import Image
 
 # --- Initialize Database ---
 def init_db():
@@ -344,20 +345,29 @@ if role == "assistant":
         except Exception as e:
             st.warning(f"Could not load image: {e}")
 
-# --- Display user message ---
+# --- Display chat messages ---
+if role == "assistant":
+    safe_content = html.escape(content).replace("\n", "<br/>")
+    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
+
+    if image_path:
+        try:
+            image = Image.open(image_path)
+            st.image(image, caption="AI Response Image", use_column_width=True)
+        except Exception as e:
+            st.warning(f"Could not load image: {e}")
+
 elif role == "user":
-    safe_content = content.replace("\n", "<br/>")
+    safe_content = html.escape(content).replace("\n", "<br/>")
     st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
 
-                    # user message bubble
-escaped_content = st.escape(content).replace("\n", "<br/>")
-st.markdown(f"<div class='bubble-user'>{escaped_content}</div>", unsafe_allow_html=True)
-                if image_path:
-                    try:
-                        st.image(str(image_path), width=360)
-                    except Exception:
-                        pass
-        st.markdown('</div>', unsafe_allow_html=True)
+    if image_path:
+        try:
+            st.image(str(image_path), width=360)
+        except Exception:
+            pass
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------
 # Streamlit App
@@ -386,7 +396,6 @@ with st.sidebar:
             if verify_user(username, password):
                 st.session_state.user = username
                 st.success(f"Logged in as {username}")
-                # create default conversation if none
                 if st.session_state.conv_id is None:
                     st.session_state.conv_id = create_conversation(username)
                 st.rerun()
@@ -423,110 +432,107 @@ with st.sidebar:
         st.markdown("---")
         st.markdown("### Conversations")
 
-# --- Fetch Conversations from Database ---
-def get_conversations(user_id=None):
-    """Fetch all conversations (optionally filtered by user)."""
-    conn = get_conn()
-    cur = conn.cursor()
-
-    if user_id:
-        cur.execute(
-            "SELECT id, created_at FROM conversations WHERE user_id=? ORDER BY created_at DESC",
-            (user_id,),
-        )
-    else:
-        cur.execute("SELECT id, created_at FROM conversations ORDER BY created_at DESC")
-
-    rows = cur.fetchall()
-    conn.close()
-    return [{"id": r[0], "created_at": r[1]} for r in rows]
-
-                        # --- Conversation Management ---
-st.markdown("### Conversations")
-
-conversations = get_conversations()
-
-if conversations:
-    for c in conversations:
-        st.write(f"🗂️ Conversation ID: {c['id']} — Created: {c['created_at']}")
-
-        # Delete button for each conversation
-        if st.button(f"🗑️ Delete {c['id']}", key=f"del_{c['id']}"):
+        # --- Fetch Conversations from Database ---
+        def get_conversations(user_id=None):
+            """Fetch all conversations (optionally filtered by user)."""
             conn = get_conn()
             cur = conn.cursor()
-            cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
-            cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
-            conn.commit()
+            if user_id:
+                cur.execute(
+                    "SELECT id, created_at FROM conversations WHERE user_id=? ORDER BY created_at DESC",
+                    (user_id,),
+                )
+            else:
+                cur.execute("SELECT id, created_at FROM conversations ORDER BY created_at DESC")
+            rows = cur.fetchall()
             conn.close()
-            st.success(f"✅ Conversation {c['id']} deleted")
+            return [{"id": r[0], "created_at": r[1]} for r in rows]
+
+        # --- Conversation Management ---
+        conversations = get_conversations(st.session_state.user)
+        if conversations:
+            for c in conversations:
+                st.write(f"🗂️ Conversation ID: {c['id']} — Created: {c['created_at']}")
+                if st.button(f"🗑️ Delete {c['id']}", key=f"del_{c['id']}"):
+                    conn = get_conn()
+                    cur = conn.cursor()
+                    cur.execute("DELETE FROM messages WHERE conversation_id=?", (c["id"],))
+                    cur.execute("DELETE FROM conversations WHERE id=?", (c["id"],))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"✅ Conversation {c['id']} deleted")
+                    st.rerun()
+        else:
+            st.info("No conversations found yet.")
+
+        st.markdown("---")
+        # persona
+        st.markdown("### Persona")
+        p = st.selectbox(
+            "Choose assistant style",
+            ["Friendly", "Neutral", "Cheerful", "Professional"],
+            index=["Friendly", "Neutral", "Cheerful", "Professional"].index(st.session_state.persona),
+            key="persona_select"
+        )
+        st.session_state.persona = p
+        st.markdown("---")
+
+        # NEW conversation
+        if st.button("New chat (clear view)"):
+            st.session_state.conv_id = create_conversation(st.session_state.user)
             st.rerun()
-else:
-    st.info("No conversations found yet.")
-
-    
-    st.markdown("---")
-    # persona
-    st.markdown("### Persona")
-    p = st.selectbox(
-        "Choose assistant style",
-        ["Friendly", "Neutral", "Cheerful", "Professional"],
-        index=["Friendly", "Neutral", "Cheerful", "Professional"].index(st.session_state.persona),
-        key="persona_select"
-    )
-    st.session_state.persona = p
-    st.markdown("---")
-
-    # NEW conversation
-    if st.button("New chat (clear view)"):
-        st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
 
 # --- Main UI ---
 if not st.session_state.user:
-    st.markdown("<div style='padding:30px'><h2 style='color:#dff9ff'>Welcome to Nexa</h2><p class='small'>Please login or register in the sidebar to start.</p></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='padding:30px'><h2 style='color:#dff9ff'>Welcome to Nexa</h2>"
+        "<p class='small'>Please login or register in the sidebar to start.</p></div>",
+        unsafe_allow_html=True
+    )
 else:
-    left_col, right_col = st.columns([3,1])
+    left_col, right_col = st.columns([3, 1])
     with left_col:
         st.markdown("### Chat")
-        # load messages for current conv
+
+        # load messages for current conversation
         if not st.session_state.conv_id:
-            # create a conversation on first login if none
             st.session_state.conv_id = create_conversation(st.session_state.user)
+
         messages = load_messages(st.session_state.conv_id)
         render_chat_messages(messages)
 
         # input area
         with st.form("chat_input_form", clear_on_submit=False):
             user_text = st.text_area("Message", key="user_msg", height=80, placeholder="Ask Nexa anything...")
-            uploaded_file = st.file_uploader("Attach image (optional)", type=["png","jpg","jpeg","gif"])
+            uploaded_file = st.file_uploader("Attach image (optional)", type=["png", "jpg", "jpeg", "gif"])
             submit = st.form_submit_button("Send")
+
             if submit:
                 # Save user message (and image if present)
                 img_path = None
                 if uploaded_file:
-                    # persist uploaded file in uploads/
                     suffix = Path(uploaded_file.name).suffix
                     fname = f"{st.session_state.user}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{suffix}"
                     fpath = UPLOAD_DIR / fname
-                    bytes_data = uploaded_file.read()
-                    fpath.write_bytes(bytes_data)
+                    fpath.write_bytes(uploaded_file.read())
                     img_path = str(fpath)
-                # Save user message
+
                 save_message(st.session_state.conv_id, st.session_state.user, "user", user_text or None, img_path)
-                # rename conversation title once (best effort)
+
                 if user_text:
                     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text, max_words=5))
-                # prepare messages for API: include history
+
                 history = load_messages(st.session_state.conv_id)
-                payload_messages = [{"role":"system","content":f"You are Nexa, a helpful assistant. Persona: {st.session_state.persona}."}]
+                payload_messages = [
+                    {"role": "system", "content": f"You are Nexa, a helpful assistant. Persona: {st.session_state.persona}."}
+                ]
                 for m in history:
                     role = "assistant" if m["role"] == "assistant" else "user"
-                    content = m["content"] if m["content"] else ""
+                    content = m["content"] or ""
                     payload_messages.append({"role": role, "content": content})
-                # append the new user message (redundant but safe)
-                payload_messages.append({"role":"user","content": user_text or ""})
 
-                # call OpenRouter
+                payload_messages.append({"role": "user", "content": user_text or ""})
+
                 assistant_reply = ""
                 try:
                     with st.spinner("Thinking..."):
@@ -534,44 +540,19 @@ else:
                 except Exception as e:
                     assistant_reply = f"(LLM error) {e}"
 
-# --- Get AI reply from API ---
-try:
-    assistant_reply = get_ai_reply(user_input, st.session_state.persona)
-except Exception as e:
-    assistant_reply = f"⚠️ Error fetching AI reply: {e}"
+                if assistant_reply:
+                    save_message(st.session_state.conv_id, "assistant", "assistant", assistant_reply, None)
+                    st.rerun()
 
-# Show assistant reply in chat
-st.chat_message("assistant").markdown(assistant_reply)
-
-  # Save assistant reply safely
-if "assistant_reply" in locals() and assistant_reply:
-    save_message(
-        st.session_state.conv_id,
-        "assistant",
-        "assistant",
-        assistant_reply,
-        None
-    )
-    st.rerun()
-
-# --- Main layout: Chat (left) and Info (right) ---
-left_col, right_col = st.columns([3, 1])
-
-with left_col:
-    st.markdown("### Chat")
-    # (Your chat input/output section goes here)
-
-with right_col:
-    st.markdown("### Info")
-    st.markdown(f"**User:** {st.session_state.user}")
-    st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
-    st.markdown(f"**Persona:** {st.session_state.persona}")
-    st.markdown("---")
-    st.markdown("### Tips")
-    st.markdown("- Use `news: topic` to fetch news (if GNews key configured).")
-    st.markdown("- Upload images to show them in chat.")
-    st.markdown("---")
-    st.markdown("### App")
-    st.markdown(
-        "This app uses OpenRouter for AI replies. Make sure `OPENROUTER_API_KEY` is set in your environment."
-    )
+    with right_col:
+        st.markdown("### Info")
+        st.markdown(f"**User:** {st.session_state.user}")
+        st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
+        st.markdown(f"**Persona:** {st.session_state.persona}")
+        st.markdown("---")
+        st.markdown("### Tips")
+        st.markdown("- Use `news: topic` to fetch news (if GNews key configured).")
+        st.markdown("- Upload images to show them in chat.")
+        st.markdown("---")
+        st.markdown("### App")
+        st.markdown("This app uses OpenRouter for AI replies. Make sure `OPENROUTER_API_KEY` is set in your environment.")
