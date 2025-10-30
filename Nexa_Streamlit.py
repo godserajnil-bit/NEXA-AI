@@ -308,10 +308,9 @@ def render_chat_messages(messages):
             st.markdown(meta, unsafe_allow_html=True)
 
             if role == "assistant":
-                st.markdown(
-                    f"<div class='bubble-ai'>{content.replace('\\n', '<br/>')}</div>",
-                    unsafe_allow_html=True
-                )
+               safe_content = content.replace("\n", "<br/>")
+st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
+                 
                 if image_path:
                     try:
                         from PIL import Image
