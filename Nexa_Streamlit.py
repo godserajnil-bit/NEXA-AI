@@ -12,6 +12,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 import streamlit as st
+import html
 
 # --- Initialize Database ---
 def init_db():
@@ -311,19 +312,22 @@ def render_chat_messages(messages):
                safe_content = content.replace("\n", "<br/>")
 st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
                  
-                if image_path:
-                    try:
-                        from PIL import Image
-                        image = Image.open(image_path)
-                        st.image(image, caption="AI Response Image", use_column_width=True)
-                    except Exception as e:
-                        st.warning(f"Could not load image: {e}")
+               if role == "assistant":
+    safe_content = content.replace("\n", "<br/>")
+    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
-            elif role == "user":
-                st.markdown(
-                    f"<div class='bubble-user'>{content.replace('\\n', '<br/>')}</div>",
-                    unsafe_allow_html=True
-                )
+    if image_path:
+        try:
+            from PIL import Image
+            image = Image.open(image_path)
+            st.image(image, caption="AI Response Image", use_column_width=True)
+        except Exception as e:
+            st.warning(f"Could not load image: {e}")
+
+           elif role == "user":
+    safe_content = content.replace("\n", "<br/>")
+    st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
+
                 if image_path:
                     try:
                         st.image(str(image_path), width=360)
@@ -333,7 +337,8 @@ st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=Tr
         st.markdown('</div>', unsafe_allow_html=True)
 # --- Display assistant message ---
 if role == "assistant":
-    st.markdown(f"<div class='bubble-ai'>{content.replace('\\n', '<br/>')}</div>", unsafe_allow_html=True)
+    safe_content = content.replace("\n", "<br/>")
+    st.markdown(f"<div class='bubble-ai'>{safe_content}</div>", unsafe_allow_html=True)
 
     if image_path:
         try:
@@ -344,7 +349,9 @@ if role == "assistant":
 
 # --- Display user message ---
 elif role == "user":
-    st.markdown(f"<div class='bubble-user'>{content.replace('\\n', '<br/>')}</div>", unsafe_allow_html=True)
+    safe_content = content.replace("\n", "<br/>")
+    st.markdown(f"<div class='bubble-user'>{safe_content}</div>", unsafe_allow_html=True)
+
                     # user message bubble
 escaped_content = st.escape(content).replace("\n", "<br/>")
 st.markdown(f"<div class='bubble-user'>{escaped_content}</div>", unsafe_allow_html=True)
