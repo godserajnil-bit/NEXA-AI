@@ -7,12 +7,21 @@
 
 import sys, io, os
 
-# Force UTF-8 globally (for Render)
-os.environ["PYTHONIOENCODING"] = "utf-8"
+# --- Safe UTF-8 setup for Render ---
+try:
+    # Set environment variable for UTF-8 encoding
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["LANG"] = "en_US.UTF-8"
 
-# Reconfigure stdout/stderr early
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    # Only reconfigure if stdout/stderr are open and have a buffer
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+except Exception as e:
+    # Don’t crash app if Render closes stdout early
+    pass
+
 import sqlite3
 import requests
 import tempfile
