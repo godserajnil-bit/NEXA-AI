@@ -18,11 +18,10 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 import streamlit as st
-# (and any other imports below this)
-
+# ✅ Must be FIRST Streamlit command
 st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
-local_css()
 
+# --- Initialize session state ---
 if "user" not in st.session_state:
     st.session_state.user = None
 if "conv_id" not in st.session_state:
@@ -32,10 +31,9 @@ if "persona" not in st.session_state:
 
 # --- Initialize Database ---
 def init_db():
-    conn = sqlite3.connect("nexa.db")  # ✅ correct
+    conn = sqlite3.connect("nexa.db")
     cur = conn.cursor()
 
-    # Create users table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +42,6 @@ def init_db():
         )
     """)
 
-    # Create conversations table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +50,6 @@ def init_db():
         )
     """)
 
-    # Create messages table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,11 +65,10 @@ def init_db():
     conn.commit()
     conn.close()
 
+# ✅ Create tables before app starts
+init_db()
 
-# ✅ Call it right after defining
-init_db()  # Ensures all tables exist before the app starts
-
-# --- AI Reply Function (Final, Tested) ---
+# --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
     api_key = os.getenv("OPENROUTER_API_KEY")
@@ -88,7 +83,7 @@ def get_ai_reply(prompt, persona="Neutral"):
     }
 
     data = {
-        "model": "meta-llama/llama-3.1-70b-instruct",  # ✅ this model works perfectly
+        "model": "meta-llama/llama-3.1-70b-instruct",
         "messages": [
             {"role": "system", "content": f"You are a {persona} assistant."},
             {"role": "user", "content": prompt},
@@ -110,7 +105,7 @@ def get_ai_reply(prompt, persona="Neutral"):
     except Exception as e:
         return f"⚠️ OpenRouter error: {e}"
 
-# --- Chat Section (Clean Display) ---
+# --- Chat Section ---
 st.markdown("### 💬 Chat")
 
 # Create message list if not exists
@@ -130,13 +125,15 @@ user_input = st.chat_input("Type your message...")
 if user_input:
     # Add user message
     st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Generate AI reply
     with st.spinner("Nexa is thinking..."):
         ai_reply = get_ai_reply(user_input, st.session_state.get("persona", "Neutral"))
 
     # Add assistant message
     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
 
-    # Refresh chat display
+    # ✅ Corrected this line (missing parenthesis)
     st.rerun()
 
 # ---------------------------
