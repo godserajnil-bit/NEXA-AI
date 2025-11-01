@@ -5,6 +5,10 @@
 #   pip install -r requirements.txt
 #   streamlit run app.py
 
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import os
 import sqlite3
 import requests
@@ -13,10 +17,6 @@ from datetime import datetime
 from pathlib import Path
 import html
 from PIL import Image
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
-
 import streamlit as st
 # ✅ Must be FIRST Streamlit command
 st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
@@ -99,14 +99,19 @@ def get_ai_reply(prompt, persona="Neutral"):
             json=data,
             timeout=30
         )
+
         if response.status_code != 200:
             return f"⚠️ API Error {response.status_code}: {response.text}"
 
         reply = response.json()["choices"][0]["message"]["content"].strip()
-        return reply.encode('utf-8', 'ignore').decode('utf-8')
+        # Ensure reply is UTF-8 safe
+        reply = reply.encode("utf-8", "ignore").decode("utf-8")
+        return reply
 
     except Exception as e:
-        return f"⚠️ OpenRouter error: {e}"
+        # Also make error message UTF-8 safe
+        err = str(e).encode("utf-8", "ignore").decode("utf-8")
+        return f"⚠️ OpenRouter error: {err}"
 
 # --- Chat Section ---
 st.markdown("### 💬 Chat")
