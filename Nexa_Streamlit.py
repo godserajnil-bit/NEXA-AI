@@ -83,8 +83,6 @@ init_db()
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
-    import html
-
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         return "⚠️ Missing OpenRouter API key. Please set OPENROUTER_API_KEY in your environment."
@@ -113,18 +111,16 @@ def get_ai_reply(prompt, persona="Neutral"):
             json=data,
             timeout=30
         )
-
         if response.status_code != 200:
-            return f"⚠️ API Error {response.status_code}: {response.text}"
+            msg = response.text.encode('utf-8', 'ignore').decode('utf-8')
+            return f"⚠️ API Error {response.status_code}: {msg}"
 
         reply = response.json()["choices"][0]["message"]["content"].strip()
-        reply = html.unescape(reply)
-        reply = reply.encode("utf-8", "ignore").decode("utf-8")
-        return reply
+        return reply.encode('utf-8', 'ignore').decode('utf-8')
 
     except Exception as e:
-        err = str(e).encode("utf-8", "ignore").decode("utf-8")
-        return f"⚠️ OpenRouter error: {err}"
+        err_msg = str(e).encode('utf-8', 'ignore').decode('utf-8')
+        return f"⚠️ OpenRouter error: {err_msg}"
 
 # --- Chat Section ---
 st.markdown("### 💬 Chat")
