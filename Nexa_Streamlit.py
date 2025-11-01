@@ -5,11 +5,14 @@
 #   pip install -r requirements.txt
 #   streamlit run app.py
 
-import sys, io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+import sys, io, os
 
-import os
+# Force UTF-8 globally (for Render)
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+# Reconfigure stdout/stderr early
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 import sqlite3
 import requests
 import tempfile
@@ -71,6 +74,8 @@ init_db()
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
+    import html
+
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         return "⚠️ Missing OpenRouter API key. Please set OPENROUTER_API_KEY in your environment."
@@ -104,12 +109,11 @@ def get_ai_reply(prompt, persona="Neutral"):
             return f"⚠️ API Error {response.status_code}: {response.text}"
 
         reply = response.json()["choices"][0]["message"]["content"].strip()
-        # Ensure reply is UTF-8 safe
+        reply = html.unescape(reply)
         reply = reply.encode("utf-8", "ignore").decode("utf-8")
         return reply
 
     except Exception as e:
-        # Also make error message UTF-8 safe
         err = str(e).encode("utf-8", "ignore").decode("utf-8")
         return f"⚠️ OpenRouter error: {err}"
 
