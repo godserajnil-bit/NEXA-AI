@@ -25,7 +25,7 @@ except Exception as e:
 import sqlite3
 import requests
 import tempfile
-from datetime import datetime
+from datetime import datetime,timezone
 from pathlib import Path
 import html
 from PIL import Image
@@ -222,32 +222,55 @@ init_db()
 # ---------------------------
 # Core DB operations
 # ---------------------------
+
 def create_user(username: str, password: str):
-    conn = get_conn(); c = conn.cursor()
+    conn = get_conn()
+    c = conn.cursor()
     c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
+
 
 def verify_user(username: str, password: str) -> bool:
-    conn = get_conn(); c = conn.cursor()
+    conn = get_conn()
+    c = conn.cursor()
     c.execute("SELECT password FROM users WHERE username=?", (username,))
-    row = c.fetchone(); conn.close()
+    row = c.fetchone()
+    conn.close()
     return bool(row and row["password"] == password)
 
+
 def create_conversation(user: str, title: str = "New chat"):
-    conn = get_conn(); c = conn.cursor()
-    now = datetime.utcnow().isoformat()
-    c.execute("INSERT INTO conversations (user, title, created) VALUES (?, ?, ?)", (user, title, now))
-    conn.commit(); cid = c.lastrowid; conn.close(); return cid
+    conn = get_conn()
+    c = conn.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    c.execute(
+        "INSERT INTO conversations (user_id, title, created_at) VALUES (?, ?, ?)",
+        (user, title, now),
+    )
+    conn.commit()
+    cid = c.lastrowid
+    conn.close()
+    return cid
+
 
 def list_conversations(user: str):
-    conn = get_conn(); c = conn.cursor()
-    c.execute("SELECT id, title, created FROM conversations WHERE user=? ORDER BY id DESC", (user,))
-    rows = c.fetchall(); conn.close()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, title, created_at FROM conversations WHERE user_id=? ORDER BY id DESC",
+        (user,),
+    )
+    rows = c.fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
+
 def rename_conversation_if_default(cid: int, new_title: str):
-    if not new_title: return
-    conn = get_conn(); c = conn.cursor()
+    if not new_title:
+        return
+    conn = get_conn()
+    c = conn.cursor()
     c.execute("SELECT title FROM conversations WHERE id=?", (cid,))
     row = c.fetchone()
     if row and (row["title"] is None or row["title"].strip() == "" or row["title"] == "New chat"):
@@ -255,17 +278,28 @@ def rename_conversation_if_default(cid: int, new_title: str):
         conn.commit()
     conn.close()
 
+
 def save_message(conv_id: int, sender: str, role: str, content: str = None, image_path: str = None):
-    ts = datetime.utcnow().isoformat()
-    conn = get_conn(); c = conn.cursor()
-    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, timestamp) VALUES (?,?,?,?,?,?)",
-              (conv_id, sender, role, content, image_path, ts))
-    conn.commit(); conn.close()
+    ts = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conv_id, sender, role, content, image_path, ts),
+    )
+    conn.commit()
+    conn.close()
+
 
 def load_messages(conv_id: int):
-    conn = get_conn(); c = conn.cursor()
-    c.execute("SELECT sender, role, content, image_path, timestamp FROM messages WHERE conversation_id=? ORDER BY id", (conv_id,))
-    rows = c.fetchall(); conn.close()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "SELECT sender, role, content, image_path, created_at FROM messages WHERE conversation_id=? ORDER BY id",
+        (conv_id,),
+    )
+    rows = c.fetchall()
+    conn.close()
     return [dict(r) for r in rows]
 
 # ---------------------------
