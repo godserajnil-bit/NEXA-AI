@@ -23,6 +23,7 @@ except Exception as e:
     pass
 
 import sqlite3
+import glob
 import requests
 import tempfile
 from datetime import datetime,timezone
@@ -43,7 +44,7 @@ if "persona" not in st.session_state:
 
 # --- Initialize Database ---
 def reset_db():
-    # 🧹 Remove all possible nexa.db files
+    # 🧹 Remove all possible nexa.db files (recursive search)
     for db in glob.glob("**/nexa.db", recursive=True):
         try:
             os.remove(db)
@@ -90,11 +91,12 @@ def reset_db():
     conn.commit()
     conn.close()
 
+    # Safe print for Render environments
     try:
         print("✅ Database reset complete with correct schema.")
     except Exception:
         pass
-
+        
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
     """Fetch an AI-generated reply from OpenRouter."""
