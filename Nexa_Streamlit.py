@@ -42,56 +42,58 @@ if "persona" not in st.session_state:
     st.session_state.persona = "Friendly"
 
 # --- Initialize Database ---
-def init_db():
+def reset_db():
+    # 🧹 Remove all possible nexa.db files
+    for db in glob.glob("**/nexa.db", recursive=True):
+        try:
+            os.remove(db)
+            print(f"🗑️ Removed old DB at: {db}")
+        except Exception:
+            pass
+
     conn = sqlite3.connect("nexa.db")
     cur = conn.cursor()
 
+    # ✅ Users table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            password TEXT
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
+            password TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
+    # ✅ Conversations table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            title TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # ✅ Messages table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             conversation_id INTEGER,
             sender TEXT,
-            role TEXT,
-            content TEXT,
-            image BLOB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         )
     """)
 
     conn.commit()
     conn.close()
 
-# --- FORCE RESET DATABASE SCHEMA (run once to fix schema) ---
-DB_PATH = "nexa.db"
-
-if os.path.exists(DB_PATH):
-    os.remove(DB_PATH)
     try:
-        print("🗑️ Old database deleted — rebuilding...")
+        print("✅ Database reset complete with correct schema.")
     except Exception:
         pass
-
-init_db()
-try:
-    print("✅ Database rebuilt with correct schema.")
-except Exception:
-    pass
 
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
