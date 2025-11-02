@@ -77,8 +77,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-# ✅ Create tables before app starts
+# --- FORCE RESET DATABASE SCHEMA (run once to fix schema) ---
+DB_PATH = "nexa.db"
+
+if os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
+    print("🗑️ Old database deleted — rebuilding...")
+
 init_db()
+print("✅ Database rebuilt with correct schema.")
 
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
