@@ -82,10 +82,16 @@ DB_PATH = "nexa.db"
 
 if os.path.exists(DB_PATH):
     os.remove(DB_PATH)
-    print("🗑️ Old database deleted — rebuilding...")
+    try:
+        print("🗑️ Old database deleted — rebuilding...")
+    except Exception:
+        pass
 
 init_db()
-print("✅ Database rebuilt with correct schema.")
+try:
+    print("✅ Database rebuilt with correct schema.")
+except Exception:
+    pass
 
 # --- AI Reply Function ---
 def get_ai_reply(prompt, persona="Neutral"):
