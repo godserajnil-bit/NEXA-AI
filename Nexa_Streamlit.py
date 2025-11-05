@@ -1,12 +1,12 @@
 # Nexa_Simple.py
-# Simplified Nexa — clean layout, + upload button, same DB logic intact.
+# Simplified Nexa — clean layout, scrollable chat, inline upload, same DB logic intact.
 
 import os
 import sys
 import io
 import sqlite3
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import html
 import streamlit as st
@@ -71,7 +71,7 @@ def reset_db():
 reset_db()
 
 # ---------------------------
-# Helper functions
+# Helpers
 # ---------------------------
 def create_conversation(user, title="New chat"):
     conn = get_conn()
@@ -121,9 +121,6 @@ def load_messages(conv_id):
     conn.close()
     return [dict(r) for r in rows]
 
-# ---------------------------
-# Small helpers
-# ---------------------------
 STOPWORDS = {"the", "and", "for", "that", "with", "this", "what", "when", "where", "which", "would", "could", "should"}
 
 def simple_main_motive(text):
@@ -145,11 +142,12 @@ def call_openrouter(messages, model=MODEL):
     return data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
 # ---------------------------
-# CSS (Simple & Clean)
+# CSS — Clean layout + scrollable chat
 # ---------------------------
 st.markdown("""
 <style>
 .stApp { background-color: #0d1117; color: #f0f6fc; }
+.chat-area { max-height: 480px; overflow-y: auto; padding: 10px; }
 .chat-bubble-user { background: #1f6feb; color: white; padding:10px 14px; border-radius:12px; margin:5px 0; width:fit-content; }
 .chat-bubble-ai { background: #21262d; padding:10px 14px; border-radius:12px; margin:5px 0; width:fit-content; }
 .sidebar-content { font-size: 15px; }
@@ -158,7 +156,7 @@ input, textarea { border-radius:8px !important; }
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Session Init
+# Session
 # ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
@@ -180,58 +178,65 @@ with st.sidebar:
             st.session_state.conv_id = conv["id"]
             st.rerun()
     st.markdown("---")
-    st.markdown("### Info", unsafe_allow_html=True)
-    st.markdown(f"**User:** {st.session_state.user}")
+    st.markdown("**User:** " + st.session_state.user)
     st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
-    st.markdown("---")
-    st.markdown("**Tips**\n- Use '+' to attach files\n- First message names chat\n- Minimal layout")
 
 # ---------------------------
-# Chat UI
+# Chat Area
 # ---------------------------
 st.markdown("### 💭 Chat")
+st.markdown("<div class='chat-area'>", unsafe_allow_html=True)
 
 messages = load_messages(st.session_state.conv_id)
-for msg in messages:
-    if msg["role"] == "assistant":
-        st.markdown(f"<div class='chat-bubble-ai'>{html.escape(msg['content'])}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='chat-bubble-user'>{html.escape(msg['content'])}</div>", unsafe_allow_html=True)
-    if msg["image_path"]:
-        st.image(msg["image_path"], width=250)
+if not messages:
+    st.info("Start chatting with Nexa 👇")
+else:
+    for msg in messages:
+        if msg["role"] == "assistant":
+            st.markdown(f"<div class='chat-bubble-ai'>{html.escape(msg['content'])}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-bubble-user'>{html.escape(msg['content'])}</div>", unsafe_allow_html=True)
+        if msg["image_path"]:
+            st.image(msg["image_path"], width=250)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Input area (with + upload)
+# Input Area — inline + upload
 # ---------------------------
-with st.container():
-    cols = st.columns([8, 1])
-    with cols[0]:
-        user_text = st.text_input("Type your message...", key="input_msg")
-    with cols[1]:
-        uploaded = st.file_uploader("➕", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+cols = st.columns([8, 1])
+with cols[0]:
+    user_text = st.text_input("Type your message...", key="input_msg", label_visibility="collapsed")
+with cols[1]:
+    uploaded = st.file_uploader("➕", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
 
-    if st.button("Send", type="primary"):
-        img_path = None
-        if uploaded:
-            fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded.name}"
-            path = UPLOAD_DIR / fname
-            path.write_bytes(uploaded.read())
-            img_path = str(path)
+if st.button("Send", type="primary"):
+    img_path = None
+    if uploaded:
+        fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded.name}"
+        path = UPLOAD_DIR / fname
+        path.write_bytes(uploaded.read())
+        img_path = str(path)
 
-        save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
-        rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
+    save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
+    rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
-        history = load_messages(st.session_state.conv_id)
-        payload = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
-        for m in history:
-            role = "assistant" if m["role"] == "assistant" else "user"
-            payload.append({"role": role, "content": m["content"] or ""})
-        payload.append({"role": "user", "content": user_text or ""})
+    history = load_messages(st.session_state.conv_id)
+    payload = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
+    for m in history:
+        role = "assistant" if m["role"] == "assistant" else "user"
+        payload.append({"role": role, "content": m["content"] or ""})
+    payload.append({"role": "user", "content": user_text or ""})
 
-        try:
-            reply = call_openrouter(payload)
-        except Exception as e:
-            reply = f"(Error: {e})"
+    try:
+        reply = call_openrouter(payload)
+    except Exception as e:
+        reply = f"(Error: {e})"
 
-        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
-        st.rerun()
+    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    st.rerun()
+
+# ---------------------------
+# Footer
+# ---------------------------
+st.markdown("<hr><p style='text-align:center; color:gray;'>⚡ Nexa Local — Simple Chat</p>", unsafe_allow_html=True)
