@@ -12,7 +12,15 @@ from pathlib import Path
 import html
 from PIL import Image
 import streamlit as st
-import pyttsx3
+try:
+    import pyttsx3
+    engine = pyttsx3.init()
+    def speak(text):
+        engine.say(text)
+        engine.runAndWait()
+except Exception:
+    def speak(text):
+        pass  # safely ignore if pyttsx3 not available
 
 # ---------------------------
 # UTF-8 Handling (safe)
