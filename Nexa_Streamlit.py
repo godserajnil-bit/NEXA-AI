@@ -1,6 +1,6 @@
-# Nexa_Streamlit_full_fixed.py
-# Unified Nexa app — no login/register, includes working reset_db(), chat history, motive titles, and voice toggle
-# Realistic, modern ChatGPT-like interface
+# Nexa_Streamlit_full_fixed_no_voice.py
+# Unified Nexa app — no login/register, includes working reset_db(), chat history, motive titles
+# Realistic, modern ChatGPT-like interface (no pyttsx3 / voice features)
 
 import sys
 import io
@@ -12,17 +12,6 @@ from pathlib import Path
 import html
 from PIL import Image
 import streamlit as st
-# Optional voice engine (safe fallback)
-try:
-    import pyttsx3
-    engine = pyttsx3.init()
-    def speak(text):
-        engine.say(text)
-        engine.runAndWait()
-except Exception:
-    pyttsx3 = None  # prevent NameError
-    def speak(text):
-        pass  # disable speech if pyttsx3 not available
 
 # ---------------------------
 # UTF-8 Handling (safe)
@@ -93,7 +82,7 @@ def reset_db():
     conn.commit()
     conn.close()
 
-# Call once to ensure database exists
+# Ensure DB exists
 reset_db()
 
 # ---------------------------
@@ -224,14 +213,6 @@ def render_chat_messages(messages):
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Voice system
-# ---------------------------
-engine = pyttsx3.init()
-def speak(text):
-    engine.say(text)
-    engine.runAndWait()
-
-# ---------------------------
 # Session State
 # ---------------------------
 if "user" not in st.session_state:
@@ -240,8 +221,6 @@ if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
 if "persona" not in st.session_state:
     st.session_state.persona = "Friendly"
-if "voice" not in st.session_state:
-    st.session_state.voice = False
 
 local_css()
 
@@ -276,8 +255,6 @@ with st.sidebar:
                                   index=["Friendly","Neutral","Cheerful","Professional"].index(st.session_state.persona))
     st.session_state.persona = persona_choice
 
-    st.markdown("---")
-    st.toggle("Voice", key="voice")
     st.markdown("---")
     st.write("**Model:**", MODEL)
     st.write("**DB:**", DB_PATH)
@@ -321,8 +298,6 @@ with left:
                 reply = f"(Error: {e})"
 
             save_message(st.session_state.conv_id, "Nexa", "assistant", reply, None)
-            if st.session_state.voice:
-                speak(reply)
             st.rerun()
 
 with right:
@@ -330,7 +305,6 @@ with right:
     st.markdown(f"**User:** {st.session_state.user}")
     st.markdown(f"**Conversation ID:** {st.session_state.conv_id}")
     st.markdown(f"**Persona:** {st.session_state.persona}")
-    st.markdown(f"**Voice:** {'On' if st.session_state.voice else 'Off'}")
     st.markdown("---")
     st.markdown("### Tips")
     st.markdown("- Upload images to include them in chat.")
