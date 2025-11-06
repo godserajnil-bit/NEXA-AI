@@ -12,6 +12,7 @@ from pathlib import Path
 import html
 from PIL import Image
 import streamlit as st
+# Optional voice engine (safe fallback)
 try:
     import pyttsx3
     engine = pyttsx3.init()
@@ -19,8 +20,9 @@ try:
         engine.say(text)
         engine.runAndWait()
 except Exception:
+    pyttsx3 = None  # prevent NameError
     def speak(text):
-        pass  # safely ignore if pyttsx3 not available
+        pass  # disable speech if pyttsx3 not available
 
 # ---------------------------
 # UTF-8 Handling (safe)
