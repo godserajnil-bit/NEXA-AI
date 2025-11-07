@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Clean, modern, ChatGPT-style Nexa UI with + uploader, sidebar info, no right panel, no voice
+# Clean, modern, ChatGPT-style Nexa UI with uploader, sidebar info, scrollable chat, and no right-side panel.
 
 import sys
 import io
@@ -48,7 +48,6 @@ def reset_db():
         os.remove(DB_PATH)
     conn = get_conn()
     c = conn.cursor()
-
     c.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +56,6 @@ def reset_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,11 +67,11 @@ def reset_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     conn.commit()
     conn.close()
 
-reset_db()
+if not os.path.exists(DB_PATH):
+    reset_db()
 
 # ---------------------------
 # DB Helpers
@@ -82,8 +80,7 @@ def create_conversation(user, title="New chat"):
     conn = get_conn()
     c = conn.cursor()
     now = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)",
-              (user, title, now))
+    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)", (user, title, now))
     conn.commit()
     cid = c.lastrowid
     conn.close()
@@ -92,8 +89,7 @@ def create_conversation(user, title="New chat"):
 def list_conversations(user):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT id, title FROM conversations WHERE user=? ORDER BY id DESC",
-              (user,))
+    c.execute("SELECT id, title FROM conversations WHERE user=? ORDER BY id DESC", (user,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -122,8 +118,7 @@ def save_message(cid, sender, role, content, image_path=None):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) "
-              "VALUES (?, ?, ?, ?, ?, ?)",
+    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
               (cid, sender, role, content, image_path, ts))
     conn.commit()
     conn.close()
@@ -143,15 +138,19 @@ def simple_main_motive(text, max_words=4):
 
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "[No API key set — offline mode reply]"
+        return "[Offline Mode: Nexa cannot connect to AI API]"
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        json={"model": MODEL, "messages": messages},
-        headers=headers
-    )
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json={"model": MODEL, "messages": messages},
+            headers=headers,
+            timeout=30
+        )
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"[Error: {e}]"
 
 # ---------------------------
 # CSS (Modern ChatGPT UI)
@@ -175,6 +174,7 @@ st.markdown("""
     border-radius: 12px;
     width: fit-content;
     margin: 8px 0;
+    margin-left: auto;
 }
 
 .msg-ai {
@@ -185,6 +185,10 @@ st.markdown("""
     width: fit-content;
     margin: 8px 0;
 }
+
+[data-testid="stFileUploader"] { display: none; }
+footer {visibility: hidden;}
+header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -196,6 +200,9 @@ if "user" not in st.session_state:
 
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
+
+if "refresh" not in st.session_state:
+    st.session_state.refresh = False
 
 # ---------------------------
 # SIDEBAR
@@ -244,26 +251,25 @@ with chat_box:
             st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-
         if m["image_path"]:
-            st.image(m["image_path"], width=280)
+            st.image(m["image_path"], width=250)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# INPUT AREA (ChatGPT-like with + uploader)
+# INPUT AREA
 # ---------------------------
 col1, col2 = st.columns([10, 1])
 
 with col1:
-    user_text = st.text_input("Type your message...", key="msg_box")
+    user_text = st.text_input("Type your message...", key="msg_box", placeholder="Ask me anything...", label_visibility="collapsed")
 
 with col2:
-    uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("➕", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
 
 send = st.button("Send")
 
-if send:
+if send and user_text.strip():
     img_path = None
     if uploaded_file:
         fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
@@ -272,16 +278,16 @@ if send:
         img_path = str(fullpath)
 
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
-
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
+    # Build context
     history = load_messages(st.session_state.conv_id)
     payload = [{"role": "system", "content": "You are Nexa, a helpful AI assistant."}]
     for m in history:
-        role = "assistant" if m["role"] == "assistant" else "user"
-        payload.append({"role": role, "content": m["content"]})
+        payload.append({"role": m["role"], "content": m["content"]})
 
     reply = call_openrouter(payload)
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
+    st.session_state.msg_box = ""  # clear input
     st.rerun()
