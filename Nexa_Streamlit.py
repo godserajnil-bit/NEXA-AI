@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Clean, modern, ChatGPT-style Nexa UI with uploader, sidebar info, scrollable chat, and no right-side panel.
+# Clean, modern, ChatGPT-style Nexa UI with + uploader, sidebar info, no right panel, no voice
 
 import sys
 import io
@@ -48,6 +48,7 @@ def reset_db():
         os.remove(DB_PATH)
     conn = get_conn()
     c = conn.cursor()
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +57,7 @@ def reset_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,11 +69,11 @@ def reset_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     conn.commit()
     conn.close()
 
-if not os.path.exists(DB_PATH):
-    reset_db()
+reset_db()
 
 # ---------------------------
 # DB Helpers
@@ -80,7 +82,8 @@ def create_conversation(user, title="New chat"):
     conn = get_conn()
     c = conn.cursor()
     now = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)", (user, title, now))
+    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)",
+              (user, title, now))
     conn.commit()
     cid = c.lastrowid
     conn.close()
@@ -138,19 +141,15 @@ def simple_main_motive(text, max_words=4):
 
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "[Offline Mode: Nexa cannot connect to AI API]"
+        return "[No API key set — offline mode reply]"
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            json={"model": MODEL, "messages": messages},
-            headers=headers,
-            timeout=30
-        )
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"[Error: {e}]"
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        json={"model": MODEL, "messages": messages},
+        headers=headers
+    )
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
 
 # ---------------------------
 # CSS (Modern ChatGPT UI)
@@ -158,7 +157,6 @@ def call_openrouter(messages):
 st.markdown("""
 <style>
 .stApp { background-color: #0d1117; color: #e6f6ff; }
-
 .chat-window {
     background: rgba(255,255,255,0.05);
     padding: 16px;
@@ -166,7 +164,6 @@ st.markdown("""
     height: 70vh;
     overflow-y: auto;
 }
-
 .msg-user {
     background: #1f6feb;
     color: white;
@@ -174,9 +171,7 @@ st.markdown("""
     border-radius: 12px;
     width: fit-content;
     margin: 8px 0;
-    margin-left: auto;
 }
-
 .msg-ai {
     background: #21262d;
     color: #e6f6ff;
@@ -185,10 +180,6 @@ st.markdown("""
     width: fit-content;
     margin: 8px 0;
 }
-
-[data-testid="stFileUploader"] { display: none; }
-footer {visibility: hidden;}
-header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -201,8 +192,8 @@ if "user" not in st.session_state:
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
 
-if "refresh" not in st.session_state:
-    st.session_state.refresh = False
+if "msg_box" not in st.session_state:
+    st.session_state.msg_box = ""
 
 # ---------------------------
 # SIDEBAR
@@ -239,33 +230,29 @@ with st.sidebar:
 # MAIN CHAT AREA
 # ---------------------------
 st.markdown("### 💭 Chat")
-
 chat_box = st.container()
 with chat_box:
     st.markdown('<div class="chat-window">', unsafe_allow_html=True)
 
     messages = load_messages(st.session_state.conv_id)
-
     for m in messages:
         if m["role"] == "assistant":
             st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
         if m["image_path"]:
-            st.image(m["image_path"], width=250)
+            st.image(m["image_path"], width=280)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# INPUT AREA
+# INPUT AREA (ChatGPT-like with + uploader)
 # ---------------------------
 col1, col2 = st.columns([10, 1])
-
 with col1:
-    user_text = st.text_input("Type your message...", key="msg_box", placeholder="Ask me anything...", label_visibility="collapsed")
-
+    user_text = st.text_input("Type your message...", key="msg_box", value=st.session_state.msg_box)
 with col2:
-    uploaded_file = st.file_uploader("➕", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
 
 send = st.button("Send")
 
@@ -280,14 +267,15 @@ if send and user_text.strip():
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
-    # Build context
     history = load_messages(st.session_state.conv_id)
     payload = [{"role": "system", "content": "You are Nexa, a helpful AI assistant."}]
     for m in history:
-        payload.append({"role": m["role"], "content": m["content"]})
+        role = "assistant" if m["role"] == "assistant" else "user"
+        payload.append({"role": role, "content": m["content"]})
 
     reply = call_openrouter(payload)
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    st.session_state.msg_box = ""  # clear input
+    # ✅ Proper reset
+    st.session_state.msg_box = ""
     st.rerun()
