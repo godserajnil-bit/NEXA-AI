@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Realistic ChatGPT-like Nexa UI with working send (Enter), + image, voice toggle, sidebar info
+# Realistic ChatGPT-style Nexa with inline input bar, + upload, voice toggle, enter-to-send, and clean UI
 
 import sys
 import io
@@ -28,7 +28,6 @@ except Exception:
 # Config
 # ---------------------------
 st.set_page_config(page_title="Nexa", layout="wide")
-
 DB_PATH = "nexa.db"
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -73,7 +72,8 @@ def reset_db():
     conn.commit()
     conn.close()
 
-reset_db()
+if not os.path.exists(DB_PATH):
+    reset_db()
 
 # ---------------------------
 # DB Helpers
@@ -121,16 +121,13 @@ def save_message(cid, sender, role, content, image_path=None):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute(
-        "INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (cid, sender, role, content, image_path, ts)
-    )
+    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+              (cid, sender, role, content, image_path, ts))
     conn.commit()
     conn.close()
 
 # ---------------------------
-# Utilities
+# Utility
 # ---------------------------
 STOPWORDS = {"the","and","for","that","with","this","what","when","where","which","would","could","should",
              "your","from","have","just","like","also","been","they","them","will","how","can","you","are","its"}
@@ -144,7 +141,7 @@ def simple_main_motive(text, max_words=4):
 
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "[No API key set — offline mode reply]"
+        return "⚠️ [Offline mode] Nexa simulated reply."
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -155,16 +152,16 @@ def call_openrouter(messages):
     return data["choices"][0]["message"]["content"]
 
 # ---------------------------
-# CSS (Modern ChatGPT UI)
+# CSS (ChatGPT Modern Style)
 # ---------------------------
 st.markdown("""
 <style>
 .stApp { background-color: #0d1117; color: #e6f6ff; }
 .chat-window {
-    background: rgba(255,255,255,0.05);
-    padding: 16px;
+    background: rgba(255,255,255,0.04);
+    padding: 18px;
     border-radius: 14px;
-    height: 70vh;
+    height: 75vh;
     overflow-y: auto;
 }
 .msg-user {
@@ -173,7 +170,7 @@ st.markdown("""
     padding: 10px 15px;
     border-radius: 12px;
     width: fit-content;
-    margin: 8px 0;
+    margin: 10px 0 10px auto;
 }
 .msg-ai {
     background: #21262d;
@@ -181,39 +178,32 @@ st.markdown("""
     padding: 10px 15px;
     border-radius: 12px;
     width: fit-content;
-    margin: 8px 0;
+    margin: 10px auto 10px 0;
 }
-.input-container {
+.input-bar {
     display: flex;
     align-items: center;
     background: #161b22;
+    border-radius: 12px;
     padding: 8px;
-    border-radius: 10px;
     margin-top: 10px;
 }
-.input-container input {
+.input-bar input {
     flex-grow: 1;
     border: none;
     outline: none;
     background: transparent;
     color: white;
 }
-button.send-btn {
-    background: #1f6feb;
-    color: white;
-    border-radius: 8px;
+.icon-btn {
     border: none;
-    padding: 6px 12px;
-    margin-left: 8px;
-}
-button.voice-btn {
-    background: #30363d;
+    background: transparent;
     color: white;
-    border-radius: 8px;
-    border: none;
-    padding: 6px 10px;
-    margin-left: 6px;
+    font-size: 1.2em;
+    margin: 0 6px;
+    cursor: pointer;
 }
+.icon-btn:hover { color: #1f6feb; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -222,15 +212,13 @@ button.voice-btn {
 # ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
-
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
-
 if "msg_box" not in st.session_state:
     st.session_state.msg_box = ""
 
 # ---------------------------
-# SIDEBAR
+# Sidebar
 # ---------------------------
 with st.sidebar:
     st.markdown("## 💠 Nexa")
@@ -254,72 +242,59 @@ with st.sidebar:
         reset_db()
         st.rerun()
 
-    st.markdown("---")
-    st.markdown("### App Info")
-    st.write("Model:", MODEL)
-    st.write("DB:", DB_PATH)
-
 # ---------------------------
-# MAIN CHAT AREA
+# Chat Window
 # ---------------------------
 st.markdown("### 💭 Chat")
+st.markdown('<div class="chat-window">', unsafe_allow_html=True)
+messages = load_messages(st.session_state.conv_id)
 
-chat_box = st.container()
-with chat_box:
-    st.markdown('<div class="chat-window">', unsafe_allow_html=True)
-    messages = load_messages(st.session_state.conv_id)
+for m in messages:
+    if m["role"] == "assistant":
+        st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
+    if m["image_path"]:
+        st.image(m["image_path"], width=250)
 
-    for m in messages:
-        if m["role"] == "assistant":
-            st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-        if m["image_path"]:
-            st.image(m["image_path"], width=280)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# INPUT AREA (ChatGPT-like)
+# Input Bar (Inline Icons)
 # ---------------------------
-col1, col2, col3 = st.columns([8, 1, 1])
+input_col = st.container()
+with input_col:
+    c1, c2, c3, c4 = st.columns([0.1, 8, 0.5, 0.5])
 
-with col1:
-    user_text = st.text_input(
-        "Type your message...",
-        key="msg_box",
-        value=st.session_state.msg_box,
-        on_change=lambda: st.session_state.update({"submitted": True})
-    )
+    with c1:
+        uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
+    with c2:
+        user_text = st.text_input("Ask something...", key="msg_box", placeholder="Ask me anything and press Enter ↵")
+    with c3:
+        voice_toggle = st.toggle("🎙️", key="voice_toggle")
+    with c4:
+        send = st.button("➡️")
 
-with col2:
-    uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
+if (send or user_text.strip()):
+    if user_text.strip():
+        img_path = None
+        if uploaded_file:
+            fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
+            fullpath = UPLOAD_DIR / fname
+            fullpath.write_bytes(uploaded_file.read())
+            img_path = str(fullpath)
 
-with col3:
-    voice_toggle = st.toggle("🎙️", key="voice_toggle")
+        save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
+        rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
-send = st.button("Send")
+        history = load_messages(st.session_state.conv_id)
+        payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
+        for m in history:
+            role = "assistant" if m["role"] == "assistant" else "user"
+            payload.append({"role": role, "content": m["content"]})
 
-if (send or st.session_state.get("submitted")) and user_text.strip():
-    img_path = None
-    if uploaded_file:
-        fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
-        fullpath = UPLOAD_DIR / fname
-        fullpath.write_bytes(uploaded_file.read())
-        img_path = str(fullpath)
+        reply = call_openrouter(payload)
+        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
-    rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
-
-    history = load_messages(st.session_state.conv_id)
-    payload = [{"role": "system", "content": "You are Nexa, a helpful AI assistant."}]
-    for m in history:
-        role = "assistant" if m["role"] == "assistant" else "user"
-        payload.append({"role": role, "content": m["content"]})
-
-    reply = call_openrouter(payload)
-    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
-
-    st.session_state.msg_box = ""
-    st.session_state.submitted = False
-    st.rerun()
+        st.session_state.msg_box = ""
+        st.rerun()
