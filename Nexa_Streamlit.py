@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Clean, modern, ChatGPT-style Nexa UI with + uploader, sidebar info, no right panel, no voice
+# Realistic ChatGPT-like Nexa UI with working send (Enter), + image, voice toggle, sidebar info
 
 import sys
 import io
@@ -121,8 +121,11 @@ def save_message(cid, sender, role, content, image_path=None):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-              (cid, sender, role, content, image_path, ts))
+    c.execute(
+        "INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (cid, sender, role, content, image_path, ts)
+    )
     conn.commit()
     conn.close()
 
@@ -180,6 +183,37 @@ st.markdown("""
     width: fit-content;
     margin: 8px 0;
 }
+.input-container {
+    display: flex;
+    align-items: center;
+    background: #161b22;
+    padding: 8px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+.input-container input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: white;
+}
+button.send-btn {
+    background: #1f6feb;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    padding: 6px 12px;
+    margin-left: 8px;
+}
+button.voice-btn {
+    background: #30363d;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    padding: 6px 10px;
+    margin-left: 6px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -200,7 +234,6 @@ if "msg_box" not in st.session_state:
 # ---------------------------
 with st.sidebar:
     st.markdown("## 💠 Nexa")
-
     new_name = st.text_input("Display name", st.session_state.user)
     if new_name:
         st.session_state.user = new_name
@@ -230,11 +263,12 @@ with st.sidebar:
 # MAIN CHAT AREA
 # ---------------------------
 st.markdown("### 💭 Chat")
+
 chat_box = st.container()
 with chat_box:
     st.markdown('<div class="chat-window">', unsafe_allow_html=True)
-
     messages = load_messages(st.session_state.conv_id)
+
     for m in messages:
         if m["role"] == "assistant":
             st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
@@ -246,17 +280,27 @@ with chat_box:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# INPUT AREA (ChatGPT-like with + uploader)
+# INPUT AREA (ChatGPT-like)
 # ---------------------------
-col1, col2 = st.columns([10, 1])
+col1, col2, col3 = st.columns([8, 1, 1])
+
 with col1:
-    user_text = st.text_input("Type your message...", key="msg_box", value=st.session_state.msg_box)
+    user_text = st.text_input(
+        "Type your message...",
+        key="msg_box",
+        value=st.session_state.msg_box,
+        on_change=lambda: st.session_state.update({"submitted": True})
+    )
+
 with col2:
     uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
 
+with col3:
+    voice_toggle = st.toggle("🎙️", key="voice_toggle")
+
 send = st.button("Send")
 
-if send and user_text.strip():
+if (send or st.session_state.get("submitted")) and user_text.strip():
     img_path = None
     if uploaded_file:
         fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
@@ -276,6 +320,6 @@ if send and user_text.strip():
     reply = call_openrouter(payload)
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    # ✅ Proper reset
     st.session_state.msg_box = ""
+    st.session_state.submitted = False
     st.rerun()
