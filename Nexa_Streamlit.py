@@ -7,7 +7,6 @@ import os
 import sqlite3
 import requests
 from datetime import datetime, timezone
-from pathlib import Path
 import html
 import streamlit as st
 
@@ -247,39 +246,38 @@ st.markdown("</div>", unsafe_allow_html=True)
 # ---------------------------
 # Input Bar (No Upload)
 # ---------------------------
-col1, col2, col3 = st.columns([8, 0.5, 0.5])
+def clear_input():
+    st.session_state.msg_box = ""
+
+col1, col2 = st.columns([9, 1])
 
 with col1:
-    user_text = st.text_input(
-        "Ask something...",
+    msg = st.text_input(
+        "Type your message...",
         key="msg_box",
         placeholder="Ask me anything and press Enter ↵",
         label_visibility="collapsed",
+        on_change=None
     )
 
 with col2:
-    voice_toggle = st.toggle("🎙️", key="voice_toggle")
-
-with col3:
-    send = st.button("➡️")
+    send = st.button("Send")
 
 # ---------------------------
 # Message Handling
 # ---------------------------
-if send or (user_text and user_text.strip()):
-    message_content = user_text.strip()
-    if message_content:
-        save_message(st.session_state.conv_id, st.session_state.user, "user", message_content)
-        rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(message_content))
+if send and msg.strip():
+    user_text = msg.strip()
+    save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
+    rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
-        history = load_messages(st.session_state.conv_id)
-        payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
-        for m in history:
-            role = "assistant" if m["role"] == "assistant" else "user"
-            payload.append({"role": role, "content": m["content"]})
+    history = load_messages(st.session_state.conv_id)
+    payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
+    for m in history:
+        payload.append({"role": m["role"], "content": m["content"]})
 
-        reply = call_openrouter(payload)
-        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    reply = call_openrouter(payload)
+    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-        st.session_state.msg_box = ""
-        st.experimental_rerun()
+    clear_input()
+    st.rerun()
