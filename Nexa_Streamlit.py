@@ -1,13 +1,7 @@
-# Nexa_Streamlit.py
-# Realistic ChatGPT-style Nexa (No file upload, clean chat layout)
+# Nexa_Streamlit.py — Realistic ChatGPT-style AI (fixed running & rerun issues)
 
-import sys
-import io
-import os
-import sqlite3
-import requests
+import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
-import html
 import streamlit as st
 
 # ---------------------------
@@ -75,8 +69,7 @@ def create_conversation(user, title="New chat"):
     conn = get_conn()
     c = conn.cursor()
     now = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)",
-              (user, title, now))
+    c.execute("INSERT INTO conversations (user, title, created_at) VALUES (?, ?, ?)", (user, title, now))
     conn.commit()
     cid = c.lastrowid
     conn.close()
@@ -105,7 +98,7 @@ def rename_conversation_if_default(cid, new_title):
     c = conn.cursor()
     c.execute("SELECT title FROM conversations WHERE id=?", (cid,))
     row = c.fetchone()
-    if row and (row["title"] == "New chat" or row["title"] == ""):
+    if row and (row["title"] == "New chat" or not row["title"]):
         c.execute("UPDATE conversations SET title=? WHERE id=?", (new_title, cid))
         conn.commit()
     conn.close()
@@ -134,15 +127,20 @@ def simple_main_motive(text, max_words=4):
 
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "⚠️ [Offline mode] Nexa simulated reply."
+        return "⚠️ [Offline mode] Nexa simulated reply (no API key)."
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        json={"model": MODEL, "messages": messages},
-        headers=headers
-    )
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+    try:
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json={"model": MODEL, "messages": messages},
+            headers=headers,
+            timeout=60
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
 # CSS (ChatGPT Modern Style)
@@ -173,23 +171,6 @@ st.markdown("""
     width: fit-content;
     margin: 10px auto 10px 0;
 }
-.input-bar {
-    display: flex;
-    align-items: center;
-    background: #161b22;
-    border-radius: 12px;
-    padding: 8px;
-    margin-top: 10px;
-}
-.icon-btn {
-    border: none;
-    background: transparent;
-    color: white;
-    font-size: 1.2em;
-    margin: 0 6px;
-    cursor: pointer;
-}
-.icon-btn:hover { color: #1f6feb; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -200,8 +181,8 @@ if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
-if "msg_box" not in st.session_state:
-    st.session_state.msg_box = ""
+if "new_msg" not in st.session_state:
+    st.session_state.new_msg = ""
 
 # ---------------------------
 # Sidebar
@@ -226,6 +207,7 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🧹 Reset Database"):
         reset_db()
+        st.session_state.conv_id = create_conversation(st.session_state.user)
         st.rerun()
 
 # ---------------------------
@@ -240,34 +222,28 @@ for m in messages:
         st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Input Bar (No Upload)
+# Input Bar
 # ---------------------------
-def clear_input():
-    st.session_state.msg_box = ""
-
 col1, col2 = st.columns([9, 1])
-
 with col1:
-    msg = st.text_input(
+    st.session_state.new_msg = st.text_input(
         "Type your message...",
-        key="msg_box",
+        value=st.session_state.new_msg,
         placeholder="Ask me anything and press Enter ↵",
-        label_visibility="collapsed",
-        on_change=None
+        label_visibility="collapsed"
     )
-
 with col2:
     send = st.button("Send")
 
 # ---------------------------
 # Message Handling
 # ---------------------------
-if send and msg.strip():
-    user_text = msg.strip()
+if send and st.session_state.new_msg.strip():
+    user_text = st.session_state.new_msg.strip()
+    st.session_state.new_msg = ""  # ✅ Safe reset
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
@@ -276,8 +252,8 @@ if send and msg.strip():
     for m in history:
         payload.append({"role": m["role"], "content": m["content"]})
 
-    reply = call_openrouter(payload)
-    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    with st.spinner("Nexa is thinking..."):
+        reply = call_openrouter(payload)
+        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    clear_input()
-    st.rerun()
+    st.experimental_rerun()
