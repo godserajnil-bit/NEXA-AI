@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py — Realistic ChatGPT-style AI (fixed running & rerun issues)
+# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + top-aligned)
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -143,17 +143,19 @@ def call_openrouter(messages):
         return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
-# CSS (ChatGPT Modern Style)
+# CSS (ChatGPT Modern Style, no black background)
 # ---------------------------
 st.markdown("""
 <style>
 .stApp { background-color: #0d1117; color: #e6f6ff; }
 .chat-window {
-    background: rgba(255,255,255,0.04);
-    padding: 18px;
-    border-radius: 14px;
-    height: 75vh;
+    padding: 10px;
+    border-radius: 10px;
+    max-height: 75vh;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* ✅ messages at top */
 }
 .msg-user {
     background: #1f6feb;
@@ -161,7 +163,7 @@ st.markdown("""
     padding: 10px 15px;
     border-radius: 12px;
     width: fit-content;
-    margin: 10px 0 10px auto;
+    margin: 6px 0 6px auto;
 }
 .msg-ai {
     background: #21262d;
@@ -169,7 +171,7 @@ st.markdown("""
     padding: 10px 15px;
     border-radius: 12px;
     width: fit-content;
-    margin: 10px auto 10px 0;
+    margin: 6px auto 6px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -217,11 +219,13 @@ st.markdown("### 💭 Chat")
 st.markdown('<div class="chat-window">', unsafe_allow_html=True)
 messages = load_messages(st.session_state.conv_id)
 
+# ✅ Messages appear from the top
 for m in messages:
     if m["role"] == "assistant":
         st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
@@ -243,7 +247,7 @@ with col2:
 # ---------------------------
 if send and st.session_state.new_msg.strip():
     user_text = st.session_state.new_msg.strip()
-    st.session_state.new_msg = ""  # ✅ Safe reset
+    st.session_state.new_msg = ""  # ✅ Clear safely
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
@@ -256,4 +260,4 @@ if send and st.session_state.new_msg.strip():
         reply = call_openrouter(payload)
         save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    st.experimental_rerun()
+    st.rerun()
