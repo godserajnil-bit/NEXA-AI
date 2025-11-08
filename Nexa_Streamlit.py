@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Realistic ChatGPT-style Nexa with inline input bar, + upload, voice toggle, enter-to-send, and clean UI
+# Realistic ChatGPT-style Nexa (No file upload, clean chat layout)
 
 import sys
 import io
@@ -29,8 +29,6 @@ except Exception:
 # ---------------------------
 st.set_page_config(page_title="Nexa", layout="wide")
 DB_PATH = "nexa.db"
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
@@ -47,7 +45,6 @@ def reset_db():
         os.remove(DB_PATH)
     conn = get_conn()
     c = conn.cursor()
-
     c.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +53,6 @@ def reset_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,11 +60,9 @@ def reset_db():
             sender TEXT,
             role TEXT,
             content TEXT,
-            image_path TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     conn.commit()
     conn.close()
 
@@ -117,12 +111,12 @@ def rename_conversation_if_default(cid, new_title):
         conn.commit()
     conn.close()
 
-def save_message(cid, sender, role, content, image_path=None):
+def save_message(cid, sender, role, content):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO messages (conversation_id, sender, role, content, image_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-              (cid, sender, role, content, image_path, ts))
+    c.execute("INSERT INTO messages (conversation_id, sender, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+              (cid, sender, role, content, ts))
     conn.commit()
     conn.close()
 
@@ -188,13 +182,6 @@ st.markdown("""
     padding: 8px;
     margin-top: 10px;
 }
-.input-bar input {
-    flex-grow: 1;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: white;
-}
 .icon-btn {
     border: none;
     background: transparent;
@@ -254,70 +241,45 @@ for m in messages:
         st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-    if m["image_path"]:
-        st.image(m["image_path"], width=250)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Input Bar (Inline Icons)
+# Input Bar (No Upload)
 # ---------------------------
-input_col = st.container()
-with input_col:
-    # Hide Streamlit's default uploader drop area
-    hide_uploader = """
-        <style>
-        div[data-testid="stFileUploaderDropzone"] {display: none !important;}
-        </style>
-    """
-    st.markdown(hide_uploader, unsafe_allow_html=True)
+col1, col2, col3 = st.columns([8, 0.5, 0.5])
 
-    # Clean inline bar without showing that "browse files" zone
-    c1, c2, c3, c4 = st.columns([0.2, 8, 0.5, 0.5])
+with col1:
+    user_text = st.text_input(
+        "Ask something...",
+        key="msg_box",
+        placeholder="Ask me anything and press Enter ↵",
+        label_visibility="collapsed",
+    )
 
-    with c1:
-        uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
+with col2:
+    voice_toggle = st.toggle("🎙️", key="voice_toggle")
 
-    with c2:
-        user_text = st.text_input(
-            "Ask something...",
-            key="msg_box",
-            placeholder="Ask me anything and press Enter ↵",
-            label_visibility="collapsed",
-        )
+with col3:
+    send = st.button("➡️")
 
-    with c3:
-        voice_toggle = st.toggle("🎙️", key="voice_toggle")
-
-    with c4:
-        send = st.button("➡️")
-
-# --- MESSAGE HANDLING (Same logic, fixed for visibility + clear input) ---
+# ---------------------------
+# Message Handling
+# ---------------------------
 if send or (user_text and user_text.strip()):
     message_content = user_text.strip()
     if message_content:
-        img_path = None
-        if uploaded_file:
-            fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
-            fullpath = UPLOAD_DIR / fname
-            fullpath.write_bytes(uploaded_file.read())
-            img_path = str(fullpath)
-
-        # Save user message
-        save_message(st.session_state.conv_id, st.session_state.user, "user", message_content, img_path)
+        save_message(st.session_state.conv_id, st.session_state.user, "user", message_content)
         rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(message_content))
 
-        # Build conversation context
         history = load_messages(st.session_state.conv_id)
         payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
         for m in history:
             role = "assistant" if m["role"] == "assistant" else "user"
             payload.append({"role": role, "content": m["content"]})
 
-        # Get reply and store
         reply = call_openrouter(payload)
         save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-        # Clear text box and rerun to refresh messages in upper chat window
         st.session_state.msg_box = ""
         st.experimental_rerun()
