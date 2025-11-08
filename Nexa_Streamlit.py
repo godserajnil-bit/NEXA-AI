@@ -264,19 +264,38 @@ st.markdown("</div>", unsafe_allow_html=True)
 # ---------------------------
 input_col = st.container()
 with input_col:
-    c1, c2, c3, c4 = st.columns([0.1, 8, 0.5, 0.5])
+    # Hide Streamlit's default uploader drop area
+    hide_uploader = """
+        <style>
+        div[data-testid="stFileUploaderDropzone"] {display: none !important;}
+        </style>
+    """
+    st.markdown(hide_uploader, unsafe_allow_html=True)
+
+    # Clean inline bar without showing that "browse files" zone
+    c1, c2, c3, c4 = st.columns([0.2, 8, 0.5, 0.5])
 
     with c1:
         uploaded_file = st.file_uploader("➕", type=["png","jpg","jpeg"], label_visibility="collapsed")
+
     with c2:
-        user_text = st.text_input("Ask something...", key="msg_box", placeholder="Ask me anything and press Enter ↵")
+        user_text = st.text_input(
+            "Ask something...",
+            key="msg_box",
+            placeholder="Ask me anything and press Enter ↵",
+            label_visibility="collapsed",
+        )
+
     with c3:
         voice_toggle = st.toggle("🎙️", key="voice_toggle")
+
     with c4:
         send = st.button("➡️")
 
-if (send or user_text.strip()):
-    if user_text.strip():
+# --- MESSAGE HANDLING (Same logic, fixed for visibility + clear input) ---
+if send or (user_text and user_text.strip()):
+    message_content = user_text.strip()
+    if message_content:
         img_path = None
         if uploaded_file:
             fname = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uploaded_file.name}"
@@ -284,17 +303,21 @@ if (send or user_text.strip()):
             fullpath.write_bytes(uploaded_file.read())
             img_path = str(fullpath)
 
-        save_message(st.session_state.conv_id, st.session_state.user, "user", user_text, img_path)
-        rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
+        # Save user message
+        save_message(st.session_state.conv_id, st.session_state.user, "user", message_content, img_path)
+        rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(message_content))
 
+        # Build conversation context
         history = load_messages(st.session_state.conv_id)
         payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
         for m in history:
             role = "assistant" if m["role"] == "assistant" else "user"
             payload.append({"role": role, "content": m["content"]})
 
+        # Get reply and store
         reply = call_openrouter(payload)
         save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
+        # Clear text box and rerun to refresh messages in upper chat window
         st.session_state.msg_box = ""
-        st.rerun()
+        st.experimental_rerun()
