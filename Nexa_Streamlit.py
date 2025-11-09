@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py — Clean, stable, scrollable chat with mic + send + voice output
+# Nexa_Streamlit.py — Final Stable Version (Mic + Voice Output + Scrollable Chat)
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -172,60 +172,62 @@ for m in load_messages(st.session_state.conv_id):
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Mic widget
-# ---------------------------
-mic_html = """
-<div style="display:flex;gap:8px;align-items:center;">
-  <button id='micStart'>🎤 Mic</button>
-  <div id='micStatus' style="color:#9fb8c9;">(idle)</div>
-</div>
-<script>
-let rec;
-if (window.SpeechRecognition||window.webkitSpeechRecognition){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  rec=new SR();rec.lang='en-US';rec.continuous=true;
-  rec.onresult=e=>{
-    let t='';for(let i=e.resultIndex;i<e.results.length;i++){t+=e.results[i][0].transcript;}
-    window.parent.postMessage({type:'transcript',text:t},'*');
-  };
-  micStart.onclick=()=>{rec.start();micStatus.textContent='🎙️ listening...';};
-}else{micStatus.textContent='(not supported)';}
-</script>
-"""
-components.html(mic_html, height=60)
-
-# ---------------------------
-# Input Row (text + send + speak)
+# Input Row (chat + mic + send)
 # ---------------------------
 c1, c2, c3 = st.columns([8, 1, 1])
 with c1:
     chat_val = st.text_input("Message", st.session_state.typed, key="chat_box", placeholder="Ask me anything...")
 with c2:
-    send = st.button("Send")
+    mic_area = st.empty()
+    mic_area.markdown("<div id='mic-btn'></div>", unsafe_allow_html=True)
 with c3:
-    speak = st.checkbox("🔊", value=st.session_state.speak_on_reply, key="speak_toggle")
-    st.session_state.speak_on_reply = speak
+    send = st.button("Send")
 
 # ---------------------------
-# Handle user send
+# Mic widget — auto stop + fill chat
+# ---------------------------
+mic_html = """
+<script>
+let rec;
+if (window.SpeechRecognition||window.webkitSpeechRecognition){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  rec=new SR();rec.lang='en-US';rec.continuous=false;rec.interimResults=false;
+  rec.onresult=e=>{
+    let text=e.results[0][0].transcript;
+    window.parent.postMessage({type:'transcript',text:text},'*');
+  };
+  rec.onend=()=>{document.getElementById('mic-btn').innerHTML='🎤';};
+}
+document.getElementById('mic-btn').innerHTML='<button id="micStart" style="padding:6px 10px;border-radius:6px;background:#0f1720;color:#9fb8c9;border:1px solid #243240;cursor:pointer;">🎤</button>';
+window.addEventListener('message', (e)=>{
+  if(e.data && e.data.type==='transcript'){
+    const input=document.querySelector('input[data-testid="stTextInput-input"]');
+    if(input){input.value=e.data.text;input.dispatchEvent(new Event('input',{bubbles:true}));}
+  }
+});
+document.addEventListener('click',(e)=>{
+  if(e.target.id==='micStart' && rec){rec.start();e.target.textContent='🛑';setTimeout(()=>{rec.stop();},7000);}
+});
+</script>
+"""
+components.html(mic_html, height=0)
+
+# ---------------------------
+# Handle send or enter
 # ---------------------------
 if (send or chat_val != st.session_state.typed) and chat_val.strip():
     user_text = chat_val.strip()
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
-
-    # Chat context
     msgs = [{"role": "system", "content": "You are Nexa, a realistic AI assistant."}]
     for m in load_messages(st.session_state.conv_id):
         msgs.append({"role": m["role"], "content": m["content"]})
     reply = call_openrouter(msgs)
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    # Browser TTS
     if st.session_state.speak_on_reply:
         safe = html.escape(reply).replace("\n", " ")
         components.html(f"<script>speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>", height=0)
 
-    # Reset text safely (no mutation error)
     st.session_state.typed = ""
     st.session_state["chat_box"] = ""
     st.experimental_rerun()
