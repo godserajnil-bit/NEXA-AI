@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + top-aligned)
+# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + Enter support)
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -143,7 +143,7 @@ def call_openrouter(messages):
         return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
-# CSS (ChatGPT Modern Style, no black background)
+# CSS (ChatGPT Modern Style, top aligned)
 # ---------------------------
 st.markdown("""
 <style>
@@ -155,7 +155,7 @@ st.markdown("""
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start; /* ✅ messages at top */
+    justify-content: flex-start;
 }
 .msg-user {
     background: #1f6feb;
@@ -219,35 +219,36 @@ st.markdown("### 💭 Chat")
 st.markdown('<div class="chat-window">', unsafe_allow_html=True)
 messages = load_messages(st.session_state.conv_id)
 
-# ✅ Messages appear from the top
 for m in messages:
     if m["role"] == "assistant":
         st.markdown(f"<div class='msg-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='msg-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Input Bar
+# Input Bar (Enter to Send)
 # ---------------------------
 col1, col2 = st.columns([9, 1])
 with col1:
-    st.session_state.new_msg = st.text_input(
+    new_msg = st.text_input(
         "Type your message...",
         value=st.session_state.new_msg,
         placeholder="Ask me anything and press Enter ↵",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="chat_input",
+        on_change=lambda: st.session_state.update({"send_trigger": True})
     )
 with col2:
     send = st.button("Send")
 
-# ---------------------------
-# Message Handling
-# ---------------------------
-if send and st.session_state.new_msg.strip():
-    user_text = st.session_state.new_msg.strip()
-    st.session_state.new_msg = ""  # ✅ Clear safely
+# Enter or Button triggers send
+send_pressed = send or st.session_state.get("send_trigger", False)
+
+if send_pressed and st.session_state.chat_input.strip():
+    user_text = st.session_state.chat_input.strip()
+    st.session_state.chat_input = ""  # clear after enter
+    st.session_state.send_trigger = False
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
