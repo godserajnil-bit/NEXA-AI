@@ -1,10 +1,12 @@
-# Nexa_Streamlit.py — Stable final with chat pinned bottom + no experimental_rerun
+# Nexa_Streamlit.py — Final Stable Build
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 import streamlit as st
 import streamlit.components.v1 as components
 
-# UTF-8 safety
+# ---------------------------
+# UTF-8 Safe IO
+# ---------------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     os.environ.setdefault("LANG", "en_US.UTF-8")
@@ -15,13 +17,17 @@ try:
 except Exception:
     pass
 
+# ---------------------------
 # Config
+# ---------------------------
 st.set_page_config(page_title="Nexa", layout="wide")
 DB_PATH = "nexa.db"
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# Database helpers
+# ---------------------------
+# Database Setup
+# ---------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -47,6 +53,9 @@ def reset_db():
 if not os.path.exists(DB_PATH):
     reset_db()
 
+# ---------------------------
+# DB Helpers
+# ---------------------------
 def create_conversation(user, title="New chat"):
     conn = get_conn()
     c = conn.cursor()
@@ -81,18 +90,12 @@ def save_message(cid, sender, role, content):
     conn.commit()
     conn.close()
 
-# Simple motive finder
-STOPWORDS = {"the","and","for","that","with","this","what","when","where","which","would","could","should",
-             "your","from","have","just","like","also","been","they","them","will","how","can","you","are","its"}
-def simple_main_motive(text, max_words=4):
-    cleaned = "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower())
-    words = [w for w in cleaned.split() if w not in STOPWORDS and len(w) > 2]
-    return " ".join(words[:max_words]).capitalize() if words else text[:40]
-
+# ---------------------------
 # Call OpenRouter
+# ---------------------------
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "⚠️ [Offline mode] Nexa simulated reply."
+        return "⚠️ [Offline mode] Nexa simulated reply (no API key)."
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
     try:
         r = requests.post("https://openrouter.ai/api/v1/chat/completions",
@@ -103,20 +106,37 @@ def call_openrouter(messages):
     except Exception as e:
         return f"⚠️ Nexa error: {e}"
 
-# Styling
+# ---------------------------
+# CSS
+# ---------------------------
 st.markdown("""
 <style>
 .stApp { background-color:#0d1117; color:#e6f6ff; }
-.chat-window {padding:12px; border-radius:10px; max-height:65vh; overflow-y:auto; background:rgba(255,255,255,0.03);}
-.msg-user {background:#1f6feb; color:white; padding:10px 14px; border-radius:12px; width:fit-content; margin:6px 0 6px auto;}
-.msg-ai {background:#21262d; color:#e6f6ff; padding:10px 14px; border-radius:12px; width:fit-content; margin:6px auto 6px 0;}
-.input-row {display:flex; gap:8px; align-items:center; margin-top:10px;}
-.center-col {display:flex; justify-content:center;}
-.chat-box {width:100%; max-width:900px;}
+.chat-window {
+    padding:10px; border-radius:10px;
+    max-height:80vh; overflow-y:auto;
+    display:flex; flex-direction:column; justify-content:flex-end;
+}
+.msg-user {
+    background:#1f6feb; color:white;
+    padding:10px 15px; border-radius:12px;
+    width:fit-content; margin:6px 0 6px auto;
+}
+.msg-ai {
+    background:#21262d; color:#e6f6ff;
+    padding:10px 15px; border-radius:12px;
+    width:fit-content; margin:6px auto 6px 0;
+}
+.input-row {
+    display:flex; gap:8px; align-items:center;
+    justify-content:center;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Session init
+# ---------------------------
+# Session Init
+# ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
@@ -126,7 +146,9 @@ if "typed" not in st.session_state:
 if "speak_on_reply" not in st.session_state:
     st.session_state.speak_on_reply = False
 
+# ---------------------------
 # Sidebar
+# ---------------------------
 with st.sidebar:
     st.markdown("## 💠 Nexa")
     st.session_state.user = st.text_input("Display name", st.session_state.user)
@@ -143,52 +165,51 @@ with st.sidebar:
     if st.button("🧹 Reset Database"):
         reset_db()
         st.rerun()
-    st.markdown("---")
-    st.session_state.speak_on_reply = st.checkbox("🔊 Speak replies", value=st.session_state.speak_on_reply)
 
-# Main layout
-col_left, col_mid, col_right = st.columns([1, 2, 1])
+# ---------------------------
+# Chat Display
+# ---------------------------
+st.markdown('<div class="chat-window">', unsafe_allow_html=True)
+for m in load_messages(st.session_state.conv_id):
+    css = "msg-ai" if m["role"] == "assistant" else "msg-user"
+    st.markdown(f"<div class='{css}'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------------------
+# Input Row (chat + mic + send)
+# ---------------------------
+st.markdown("<br>", unsafe_allow_html=True)
+col_mid = st.container()
 with col_mid:
-    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-    st.markdown("### 💭 Chat")
-    st.markdown('<div class="chat-window" id="chat-window">', unsafe_allow_html=True)
-    for m in load_messages(st.session_state.conv_id):
-        css = "msg-ai" if m["role"] == "assistant" else "msg-user"
-        st.markdown(f"<div class='{css}'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Input row form
-mic_html = """
-<script>
-(function(){
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SpeechRecognition) return;
-  const rec = new SpeechRecognition();
-  rec.lang='en-US'; rec.continuous=false; rec.interimResults=false;
-  let btn = document.getElementById('mic-btn');
-  if(!btn) return;
-  btn.onclick=()=>{
-    if(btn.dataset.listening==='1'){rec.stop();return;}
-    btn.dataset.listening='1'; btn.textContent='🛑';
-    rec.start(); setTimeout(()=>{rec.stop();},6000);
-  };
-  rec.onresult=(e)=>{
-    const transcript=e.results[0][0].transcript;
-    const input=document.querySelector('input[data-testid="stTextInput-input"]');
-    if(input){input.value=transcript;input.dispatchEvent(new Event('input',{bubbles:true}));}
-  };
-  rec.onend=()=>{btn.dataset.listening='0';btn.textContent='🎤';};
-})();
-</script>
-"""
-
-with col_mid:
-    with st.form("chat_form", clear_on_submit=False):
-        c1, c2, c3 = st.columns([8, 1, 1])
+    with st.form("chat_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns([10, 1, 1])
         chat_val = c1.text_input("", value=st.session_state.typed, key="chat_box", placeholder="Type your message...")
-        c2.markdown('<button id="mic-btn" style="padding:6px 10px;border-radius:6px;background:#0f1720;color:#9fb8c9;border:1px solid #243240;cursor:pointer;">🎤</button>', unsafe_allow_html=True)
+        mic_html = """
+        <script>
+        let rec;
+        if (window.SpeechRecognition||window.webkitSpeechRecognition){
+          const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+          rec=new SR();rec.lang='en-US';rec.continuous=false;rec.interimResults=false;
+          rec.onresult=e=>{
+            let text=e.results[0][0].transcript;
+            window.parent.postMessage({type:'transcript',text:text},'*');
+          };
+          rec.onend=()=>{document.getElementById('mic-btn').innerHTML='🎤';};
+        }
+        window.addEventListener('message', (e)=>{
+          if(e.data && e.data.type==='transcript'){
+            const input=document.querySelector('input[data-testid="stTextInput-input"]');
+            if(input){input.value=e.data.text;input.dispatchEvent(new Event('input',{bubbles:true}));}
+          }
+        });
+        function startMic(){
+          if(rec){rec.start();document.getElementById('mic-btn').innerText='🛑';setTimeout(()=>{rec.stop();},6000);}
+        }
+        </script>
+        <button id="mic-btn" onclick="startMic()" style="padding:6px 10px;border-radius:6px;background:#0f1720;color:#9fb8c9;border:1px solid #243240;cursor:pointer;">🎤</button>
+        """
+        c2.markdown(mic_html, unsafe_allow_html=True)
         send = c3.form_submit_button("Send")
-    components.html(mic_html, height=0)
 
 if send and chat_val.strip():
     user_text = chat_val.strip()
@@ -204,7 +225,7 @@ if send and chat_val.strip():
         safe = html.escape(reply).replace("\n", " ")
         components.html(f"<script>speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>", height=0)
 
-    st.session_state.typed = chat_val  # preserve
+    st.session_state.typed = ""
     st.rerun()
 else:
     st.session_state.typed = chat_val or st.session_state.typed
