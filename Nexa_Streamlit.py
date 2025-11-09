@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + Enter support)
+# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + Enter support, safe session clear)
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -183,8 +183,10 @@ if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
-if "new_msg" not in st.session_state:
-    st.session_state.new_msg = ""
+if "chat_input" not in st.session_state:
+    st.session_state.chat_input = ""
+if "send_trigger" not in st.session_state:
+    st.session_state.send_trigger = False
 
 # ---------------------------
 # Sidebar
@@ -231,9 +233,9 @@ st.markdown("</div>", unsafe_allow_html=True)
 # ---------------------------
 col1, col2 = st.columns([9, 1])
 with col1:
-    new_msg = st.text_input(
+    st.text_input(
         "Type your message...",
-        value=st.session_state.new_msg,
+        value=st.session_state.chat_input,
         placeholder="Ask me anything and press Enter ↵",
         label_visibility="collapsed",
         key="chat_input",
@@ -242,13 +244,15 @@ with col1:
 with col2:
     send = st.button("Send")
 
-# Enter or Button triggers send
-send_pressed = send or st.session_state.get("send_trigger", False)
+# Trigger send by button or Enter
+send_pressed = send or st.session_state.send_trigger
 
 if send_pressed and st.session_state.chat_input.strip():
     user_text = st.session_state.chat_input.strip()
-    st.session_state.chat_input = ""  # clear after enter
-    st.session_state.send_trigger = False
+
+    # safely clear input before rerun
+    st.session_state.update({"chat_input": "", "send_trigger": False})
+
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
