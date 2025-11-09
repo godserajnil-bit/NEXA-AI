@@ -1,11 +1,11 @@
-# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + fixed + Enter support, safe session clear)
-
+# Nexa_Streamlit.py — Realistic ChatGPT-style AI (clean + stable + browser TTS + mic widget)
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ---------------------------
-# UTF-8 Handling
+# UTF-8 Handling (safe)
 # ---------------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -143,7 +143,7 @@ def call_openrouter(messages):
         return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
-# CSS (ChatGPT Modern Style, top aligned)
+# CSS (Modern ChatGPT look)
 # ---------------------------
 st.markdown("""
 <style>
@@ -173,20 +173,23 @@ st.markdown("""
     width: fit-content;
     margin: 6px auto 6px 0;
 }
+.input-row { display:flex; gap:8px; align-items:center; }
+.small-muted { color:#9fb8c9; font-size:12px; margin-top:8px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Session State
+# Session State Init
 # ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
-if "chat_input" not in st.session_state:
-    st.session_state.chat_input = ""
-if "send_trigger" not in st.session_state:
-    st.session_state.send_trigger = False
+# keep typed text safe between runs
+if "typed" not in st.session_state:
+    st.session_state.typed = ""
+if "speak_on_reply" not in st.session_state:
+    st.session_state.speak_on_reply = False
 
 # ---------------------------
 # Sidebar
@@ -199,23 +202,25 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 💬 Conversations")
-    for conv in list_conversations(st.session_state.user):
-        if st.button(conv["title"], key=f"c{conv['id']}"):
-            st.session_state.conv_id = conv["id"]
-            st.rerun()
+    convs = list_conversations(st.session_state.user)
+    if convs:
+        for conv in convs:
+            if st.button(conv["title"] or "New chat", key=f"c{conv['id']}"):
+                st.session_state.conv_id = conv["id"]
+                st.experimental_rerun()
 
     if st.button("➕ New chat"):
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        st.experimental_rerun()
 
     st.markdown("---")
     if st.button("🧹 Reset Database"):
         reset_db()
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        st.experimental_rerun()
 
 # ---------------------------
-# Chat Window
+# Chat Window (top-aligned)
 # ---------------------------
 st.markdown("### 💭 Chat")
 st.markdown('<div class="chat-window">', unsafe_allow_html=True)
@@ -229,40 +234,152 @@ for m in messages:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Input Bar (Enter to Send)
+# Microphone widget (embedded via components)
 # ---------------------------
-col1, col2 = st.columns([9, 1])
+mic_html = r"""
+<div id="mic-widget" style="font-family: Inter, sans-serif; color: white;">
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button id="startMic" style="padding:6px 10px; border-radius:6px; background:#0f1720; color:#9fb8c9; border:1px solid #243240; cursor:pointer;">
+      🎤 Start Mic
+    </button>
+    <button id="stopMic" style="padding:6px 10px; border-radius:6px; background:#0f1720; color:#9fb8c9; border:1px solid #243240; cursor:pointer;">■ Stop</button>
+    <button id="copyText" style="padding:6px 10px; border-radius:6px; background:#0f1720; color:#9fb8c9; border:1px solid #243240; cursor:pointer;">📋 Copy</button>
+    <div id="mic-status" style="margin-left:10px;color:#9fb8c9;">(mic idle)</div>
+  </div>
+  <div style="margin-top:8px;">
+    <textarea id="transcript" rows="3" style="width:100%; border-radius:6px; background:#0b1116; color:#e6f6ff; border:1px solid #243240; padding:8px;" placeholder="Transcribed text will appear here..."></textarea>
+  </div>
+</div>
+
+<script>
+const startBtn = document.getElementById('startMic');
+const stopBtn = document.getElementById('stopMic');
+const copyBtn = document.getElementById('copyText');
+const status = document.getElementById('mic-status');
+const transcript = document.getElementById('transcript');
+
+let recognition = null;
+if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+  status.innerText = '(speech recognition not supported in this browser)';
+  startBtn.disabled = true;
+  stopBtn.disabled = true;
+} else {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.continuous = true;
+
+  recognition.onstart = () => { status.innerText = '(listening...)'; };
+  recognition.onend = () => { status.innerText = '(stopped)'; };
+  recognition.onerror = (e) => { status.innerText = '(error) ' + e.error; };
+
+  recognition.onresult = (event) => {
+    let text = '';
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      text += event.results[i][0].transcript;
+    }
+    transcript.value = text;
+  };
+}
+
+startBtn.onclick = () => {
+  if (recognition) recognition.start();
+};
+stopBtn.onclick = () => {
+  if (recognition) recognition.stop();
+};
+copyBtn.onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(transcript.value);
+    status.innerText = '(copied to clipboard — paste into input)';
+  } catch (e) {
+    status.innerText = '(copy failed)';
+  }
+};
+</script>
+"""
+
+# Render the mic widget below the chat and above input
+components.html(mic_html, height=160)
+
+st.markdown('<div class="small-muted">Use the mic to transcribe, press <strong>Copy</strong>, then paste into the message box and press Enter / Send.</div>', unsafe_allow_html=True)
+
+# ---------------------------
+# Input Row (text input + send + speak toggle)
+# ---------------------------
+col1, col2, col3 = st.columns([8, 1, 1])
 with col1:
-    st.text_input(
-        "Type your message...",
-        value=st.session_state.chat_input,
-        placeholder="Ask me anything and press Enter ↵",
-        label_visibility="collapsed",
-        key="chat_input",
-        on_change=lambda: st.session_state.update({"send_trigger": True})
-    )
+    # text_input is created here; don't mutate st.session_state['chat_box'] directly after creation
+    chat_box_val = st.text_input("",
+                                value=st.session_state.typed,
+                                placeholder="Ask me anything and press Enter ↵",
+                                key="chat_box")
 with col2:
     send = st.button("Send")
+with col3:
+    # toggle for browser speech output; store in session state
+    speak_toggle = st.checkbox("🎙️ Speak", value=st.session_state.speak_on_reply, key="speak_toggle")
+    st.session_state.speak_on_reply = speak_toggle
 
-# Trigger send by button or Enter
-send_pressed = send or st.session_state.send_trigger
+# Determine if user submitted: send button or Enter changed text (safe check)
+user_submitted = False
+# If Send clicked -> submit
+if send:
+    user_submitted = True
+# If Enter pressed: the text_input will have changed compared to st.session_state.typed
+elif chat_box_val != st.session_state.typed:
+    # treat change as submit only if non-empty and different from previous typed
+    if chat_box_val.strip():
+        user_submitted = True
 
-if send_pressed and st.session_state.chat_input.strip():
-    user_text = st.session_state.chat_input.strip()
+# If submitted, handle message
+if user_submitted and chat_box_val and chat_box_val.strip():
+    user_text = chat_box_val.strip()
 
-    # safely clear input before rerun
-    st.session_state.update({"chat_input": "", "send_trigger": False})
-
+    # Save user message
     save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
     rename_conversation_if_default(st.session_state.conv_id, simple_main_motive(user_text))
 
+    # Build context and call LLM
     history = load_messages(st.session_state.conv_id)
     payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant like ChatGPT."}]
     for m in history:
+        # 'role' in DB rows is either 'assistant' or user; map to system roles for model
         payload.append({"role": m["role"], "content": m["content"]})
 
     with st.spinner("Nexa is thinking..."):
         reply = call_openrouter(payload)
         save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    st.rerun()
+    # Clear the text box safely: update our typed backup and the streamlit widget value
+    st.session_state.typed = ""         # local backup
+    # To clear the displayed text_input we set the same key to empty using session_state update
+    st.session_state.chat_box = ""
+
+    # After storing reply, optionally speak it using browser TTS (inject small HTML/JS)
+    if st.session_state.speak_on_reply:
+        safe_reply = html.escape(reply).replace("\n", " ")
+        tts_html = f"""
+        <script>
+        try {{
+          const utter = new SpeechSynthesisUtterance("{safe_reply}");
+          // optional properties:
+          utter.rate = 1.0;
+          utter.pitch = 1.0;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        }} catch (e) {{
+          console.error("TTS failed", e);
+        }}
+        </script>
+        """
+        components.html(tts_html, height=0)
+
+    # rerun to show new chat message at the top area
+    st.experimental_rerun()
+
+# Keep the typed content in session state for next run (so we can detect Enter)
+st.session_state.typed = chat_box_val or ""
+
+# End of file
