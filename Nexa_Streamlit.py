@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py — Final Stable Version (Mic + Voice Output + Scrollable Chat)
+# Nexa_Streamlit.py — Stable Final Version (Mic + Voice Output + No Session Error)
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -94,7 +94,8 @@ def save_message(cid, sender, role, content):
 # ---------------------------
 # Simple motive finder
 # ---------------------------
-STOPWORDS = {"the","and","for","that","with","this","what","when","where","which","would","could","should","your","from","have","just","like","also","been","they","them","will","how","can","you","are","its"}
+STOPWORDS = {"the","and","for","that","with","this","what","when","where","which","would","could","should",
+             "your","from","have","just","like","also","been","they","them","will","how","can","you","are","its"}
 def simple_main_motive(text, max_words=4):
     cleaned = "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower())
     words = [w for w in cleaned.split() if w not in STOPWORDS and len(w) > 2]
@@ -139,7 +140,7 @@ if "conv_id" not in st.session_state:
 if "typed" not in st.session_state:
     st.session_state.typed = ""
 if "speak_on_reply" not in st.session_state:
-    st.session_state.speak_on_reply = False
+    st.session_state.speak_on_reply = True  # Enable voice output by default
 
 # ---------------------------
 # Sidebar
@@ -206,7 +207,11 @@ window.addEventListener('message', (e)=>{
   }
 });
 document.addEventListener('click',(e)=>{
-  if(e.target.id==='micStart' && rec){rec.start();e.target.textContent='🛑';setTimeout(()=>{rec.stop();},7000);}
+  if(e.target.id==='micStart' && rec){
+    rec.start();
+    e.target.textContent='🛑';
+    setTimeout(()=>{rec.stop();},7000);
+  }
 });
 </script>
 """
@@ -215,21 +220,23 @@ components.html(mic_html, height=0)
 # ---------------------------
 # Handle send or enter
 # ---------------------------
-if (send or chat_val != st.session_state.typed) and chat_val.strip():
+if (send or (chat_val != st.session_state.typed and chat_val.strip())):
     user_text = chat_val.strip()
-    save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
-    msgs = [{"role": "system", "content": "You are Nexa, a realistic AI assistant."}]
-    for m in load_messages(st.session_state.conv_id):
-        msgs.append({"role": m["role"], "content": m["content"]})
-    reply = call_openrouter(msgs)
-    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    if user_text:
+        save_message(st.session_state.conv_id, st.session_state.user, "user", user_text)
+        msgs = [{"role": "system", "content": "You are Nexa, a realistic AI assistant."}]
+        for m in load_messages(st.session_state.conv_id):
+            msgs.append({"role": m["role"], "content": m["content"]})
+        reply = call_openrouter(msgs)
+        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    if st.session_state.speak_on_reply:
-        safe = html.escape(reply).replace("\n", " ")
-        components.html(f"<script>speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>", height=0)
+        # ✅ Voice Output (Text-to-Speech)
+        if st.session_state.speak_on_reply:
+            safe_reply = html.escape(reply).replace("\n", " ")
+            components.html(f"<script>speechSynthesis.speak(new SpeechSynthesisUtterance('{safe_reply}'));</script>", height=0)
 
-    st.session_state.typed = ""
-    st.session_state["chat_box"] = ""
-    st.experimental_rerun()
+        # ✅ Safely clear user input
+        st.session_state.typed = ""
+        st.experimental_rerun()
 else:
     st.session_state.typed = chat_val
