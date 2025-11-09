@@ -1,11 +1,17 @@
-# Nexa_Streamlit.py — Stable: form submit, mic -> auto-submit, Enter clears input, browser TTS
+# Nexa_Streamlit_final.py
+# Single-file stable Nexa UI:
+# - proper st.form submit (Enter works)
+# - mic beside input (auto-stop, auto-submit)
+# - Speak toggle to the right of the mic (browser TTS)
+# - no experimental_rerun, no pyttsx3, DB preserved
+
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 import streamlit as st
 import streamlit.components.v1 as components
 
 # ---------------------------
-# Safe UTF-8
+# Safe UTF-8 IO
 # ---------------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -26,7 +32,7 @@ MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ---------------------------
-# DB helpers (unchanged logic)
+# Database Setup (unchanged logic)
 # ---------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -85,7 +91,7 @@ def rename_conversation_if_default(cid, new_title):
     conn.close()
 
 # ---------------------------
-# LLM call (OpenRouter)
+# OpenRouter LLM call (unchanged)
 # ---------------------------
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
@@ -101,7 +107,7 @@ def call_openrouter(messages):
         return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
-# Styling (chat top-aligned, longer box)
+# Styling
 # ---------------------------
 st.markdown("""
 <style>
@@ -113,15 +119,16 @@ st.markdown("""
     display:flex; flex-direction:column; justify-content:flex-start;
     background: rgba(255,255,255,0.02);
 }
-.msg-user { background:#1f6feb; color:white; padding:10px 14px; border-radius:12px; width:fit-content; margin:8px 0 8px auto; max-width:80%; word-wrap:break-word; }
-.msg-ai { background:#21262d; color:#e6f6ff; padding:10px 14px; border-radius:12px; width:fit-content; margin:8px auto 8px 0; max-width:80%; word-wrap:break-word; }
+.msg-user { background:#1f6feb; color:white; padding:10px 14px; border-radius:12px; width:fit-content; margin:8px 0 8px auto; max-width:85%; word-wrap:break-word; }
+.msg-ai { background:#21262d; color:#e6f6ff; padding:10px 14px; border-radius:12px; width:fit-content; margin:8px auto 8px 0; max-width:85%; word-wrap:break-word; }
 .input-row { display:flex; gap:8px; align-items:center; margin-top:10px; }
-.input-row .stTextInput>div>div>input { height:42px; font-size:15px; }
+.input-row .stTextInput>div>div>input { height:44px; font-size:15px; }
+.small-muted { color:#9fb8c9; font-size:12px; margin-top:6px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Session state init
+# Session state
 # ---------------------------
 if "user" not in st.session_state: st.session_state.user = "You"
 if "conv_id" not in st.session_state: st.session_state.conv_id = create_conversation(st.session_state.user)
@@ -129,139 +136,147 @@ if "typed" not in st.session_state: st.session_state.typed = ""
 if "speak_on_reply" not in st.session_state: st.session_state.speak_on_reply = False
 
 # ---------------------------
-# Page layout header
+# Page header & chat display
 # ---------------------------
 st.markdown('<div class="container-centered">', unsafe_allow_html=True)
 st.markdown("### 💭 Nexa — Chat")
 
-# ---------------------------
-# Chat display
-# ---------------------------
-st.markdown('<div class="chat-window">', unsafe_allow_html=True)
+st.markdown('<div class="chat-window" id="chat_window">', unsafe_allow_html=True)
 for m in load_messages(st.session_state.conv_id):
     css = "msg-ai" if m["role"] == "assistant" else "msg-user"
     st.markdown(f"<div class='{css}'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("")  # spacer
+st.markdown('<div class="small-muted">Tip: Allow mic access. Press mic button to capture ~6s then auto-submit.</div>', unsafe_allow_html=True)
 
 # ---------------------------
-# Inject parent listener for mic iframe messages
-# (This listens for postMessage from the iframe and sets the text input value,
-#  then triggers the form submit button click programmatically.)
+# Mic iframe script (posts transcript to parent)
+# - The parent script (below) listens and auto-submits the form.
 # ---------------------------
-st.markdown("""
+mic_iframe_html = r"""
+<div id="mic_container">
+  <button id="micBtn" style="padding:6px 10px;border-radius:6px;background:#0f1720;color:#9fb8c9;border:1px solid #243240;cursor:pointer;">
+    🎤 Start Mic
+  </button>
+  <script>
+  (function(){
+    let rec=null;
+    if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      rec = new SR();
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.continuous = false;
+      rec.onresult = function(e){
+        let text='';
+        for(let i=e.resultIndex;i<e.results.length;i++){ text += e.results[i][0].transcript; }
+        // send transcript to parent window (Streamlit page)
+        window.parent.postMessage({type:'transcript', text: text}, '*');
+      };
+      rec.onend = function(){ document.getElementById('micBtn').innerText = '🎤 Start Mic'; };
+      rec.onerror = function(ev){ document.getElementById('micBtn').innerText = '⚠ mic'; };
+    } else {
+      document.getElementById('micBtn').disabled = true;
+      document.getElementById('micBtn').innerText = 'No Mic';
+    }
+
+    document.getElementById('micBtn').onclick = function(){
+      if(!rec) return;
+      try{ rec.start(); document.getElementById('micBtn').innerText='🛑 Listening...'; }catch(e){}
+      // auto-stop after 6s
+      setTimeout(()=>{ try{ rec.stop(); }catch(e){} }, 6000);
+    };
+  })();
+  </script>
+</div>
+"""
+
+# ---------------------------
+# Parent listener: receives transcript, places in input and programmatically clicks the form submit button.
+# This uses a small injected script once on the page.
+# ---------------------------
+post_message_listener = """
 <script>
 window.addEventListener('message', (e) => {
   try {
     if (e.data && e.data.type === 'transcript') {
       const txt = e.data.text || '';
-      // find the first text input (chat form)
+      // find the chat text input
       const input = document.querySelector('input[data-testid="stTextInput-input"]');
       if (input) {
         input.value = txt;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        // find form submit button inside a form and click it (submit)
+        // find the submit button in the form and click it
         const btn = document.querySelector('form button[type="submit"]');
         if (btn) btn.click();
       }
     }
-  } catch(err) { console.error(err); }
+  } catch (err) { console.error(err); }
 });
 </script>
-""", unsafe_allow_html=True)
-
-# ---------------------------
-# Mic iframe (posts transcript to parent)
-# ---------------------------
-mic_iframe = r"""
-<div>
-  <button id="micBtn" style="padding:6px 10px;border-radius:6px;background:#0f1720;color:#9fb8c9;border:1px solid #243240;cursor:pointer;">🎤 Start Mic</button>
-  <script>
-  let rec=null;
-  if (window.SpeechRecognition || window.webkitSpeechRecognition) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    rec = new SR();
-    rec.lang = 'en-US';
-    rec.interimResults = false;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      let text = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        text += e.results[i][0].transcript;
-      }
-      // send transcript to parent window (Streamlit page)
-      window.parent.postMessage({type:'transcript', text: text}, '*');
-    };
-    rec.onend = () => { document.getElementById('micBtn').innerText = '🎤 Start Mic'; };
-    rec.onerror = (ev) => { document.getElementById('micBtn').innerText = '⚠ mic error'; };
-  } else {
-    document.getElementById('micBtn').disabled = true;
-    document.getElementById('micBtn').innerText = 'No Mic Support';
-  }
-
-  document.getElementById('micBtn').onclick = () => {
-    if (!rec) return;
-    // start, then auto-stop after 6s (shorter mobile-friendly listening)
-    document.getElementById('micBtn').innerText = '🛑 Listening...';
-    try { rec.start(); } catch(e) { console.warn(e); }
-    setTimeout(()=>{ try { rec.stop(); } catch(e){} }, 6000);
-  };
-  </script>
-</div>
 """
+st.markdown(post_message_listener, unsafe_allow_html=True)
 
-# Place mic and input inside a form so Enter triggers submit (use st.form)
+# ---------------------------
+# Chat form (st.form) — ensures Enter works and a submit button exists.
+# Layout: [text input] [mic button HTML] [Speak checkbox] [Send button]
+# ---------------------------
 with st.form(key="chat_form", clear_on_submit=False):
     cols = st.columns([8, 1, 1])
-    # text input (value is taken from session typed)
-    chat_text = cols[0].text_input("", value=st.session_state.typed, placeholder="Ask me anything and press Enter ↵", key="chat_box")
-    # mic rendered as markdown (button + JS will post message to parent)
-    cols[1].markdown(mic_iframe, unsafe_allow_html=True)
-    # speak toggle to the right of mic (near send)
+    # Text input uses st.session_state.typed as its initial value so we can clear by updating typed.
+    chat_text = cols[0].text_input(
+        "", value=st.session_state.typed, placeholder="Ask me anything and press Enter ↵", key="chat_input"
+    )
+    # mic column: render mic HTML (same page; triggers SpeechRecognition)
+    cols[1].markdown(mic_iframe_html, unsafe_allow_html=True)
+    # speak toggle and submit button (submit provided by form_submit_button)
     cols[2].checkbox("🎙️ Speak", value=st.session_state.speak_on_reply, key="speak_toggle")
-    submit = st.form_submit_button("Send")
+    submitted = st.form_submit_button("Send")
 
-# Update session state for speak toggle
+# update speak flag
 st.session_state.speak_on_reply = st.session_state.get("speak_toggle", st.session_state.speak_on_reply)
 
 # ---------------------------
-# Handle submission: Enter or Send
+# Handle submit: Enter or Send button
+# - We rely on form submit to rerun; do NOT mutate chat_input key directly after creation.
+# - Instead update st.session_state.typed (the backup), which becomes the source for next render.
 # ---------------------------
-if submit:
-    text = (chat_text or "").strip()
+if submitted:
+    text = (st.session_state.get("chat_input", "") or "").strip()
     if text:
-        # save user message, auto-rename if first meaningful text
+        # save user message
         save_message(st.session_state.conv_id, st.session_state.user, "user", text)
-        rename_conversation_if_default(st.session_state.conv_id, (lambda t: " ".join([w for w in "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in t.lower()).split() if len(w)>2][:4]).capitalize())(text))
-        # build history for model
+        # rename convo if default (simple motive)
+        try:
+            motive = " ".join([w for w in "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower()).split() if len(w) > 2][:4]).capitalize()
+            rename_conversation_if_default(st.session_state.conv_id, motive)
+        except Exception:
+            pass
+
+        # collect history and call LLM
         history = load_messages(st.session_state.conv_id)
-        payload = [{"role":"system","content":"You are Nexa, a realistic AI assistant."}]
+        payload = [{"role": "system", "content": "You are Nexa, a realistic AI assistant."}]
         for m in history:
             payload.append({"role": m["role"], "content": m["content"]})
-        # call model
+
         with st.spinner("Nexa is thinking..."):
             reply = call_openrouter(payload)
+
         save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-        # optional browser TTS (speak_on_reply)
+        # optional browser TTS (no server key required)
         if st.session_state.speak_on_reply:
-            safe = html.escape(reply).replace("\n"," ")
-            components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));}}catch(e){{console.error(e);}}</script>", height=0)
+            safe_reply = html.escape(reply).replace("\n", " ")
+            components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe_reply}'));}}catch(e){{console.error(e);}}</script>", height=0)
 
-        # clear typed session value so input is empty on next render
+        # clear the typed backup so next render shows empty field
         st.session_state.typed = ""
-        # Important: do not assign st.session_state['chat_box'] after widget creation.
-        # Instead set typed backup and allow the form to render its default from typed next run.
-        # Trigger a rerun by calling st.experimental_rerun if available, otherwise rely on Streamlit's rerun after form submit.
-        try:
-            st.experimental_rerun()
-        except Exception:
-            # some Streamlit builds may not have experimental_rerun; that's okay,
-            # form submit already causes a rerun in most environments.
-            pass
+        # Note: do NOT assign st.session_state['chat_input'] here (widget already created).
+        # Let the form re-render; on next run value for chat_input will come from st.session_state.typed.
+        # The rerun happens automatically after form submission.
 else:
-    # keep typed value persistent across runs (so change detection works)
+    # not submitted — keep typed backup so we can detect changes and preserve typing between runs
     st.session_state.typed = chat_text or st.session_state.get("typed", "")
 
-st.markdown('</div>', unsafe_allow_html=True)
+# small spacer / close container
+st.markdown("</div>", unsafe_allow_html=True)
