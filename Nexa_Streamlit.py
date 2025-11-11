@@ -267,51 +267,69 @@ if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
 """
 st.markdown(mic_js, unsafe_allow_html=True)
 
-Mic button and listener HTML (this starts Web SpeechRecognition, records ~6s, posts transcript to parent)
+# Mic button and listener HTML (this starts Web SpeechRecognition, records ~6s, posts transcript to parent)
 mic_widget = r"""
+<button class="mic-btn" onclick="window.startMic()">🎤</button>
+"""
+# we won't render mic_widget here; we'll include it in the form area (so its button is next to the send button)
 
-🎤
-""" # we won't render mic_widget here; we'll include it in the form area (so its button is next to the send button)
 ---------------------------
 Chat form (so Enter works reliably)
 - Use st.form with form_submit_button to ensure "submit" exists (avoids missing submit-button warnings)
 - Provide initial value from st.session_state.typed
 ---------------------------
 with st.form(key="chat_form"):
-    cols = st.columns([7, 1, 1]) # input box (value driven by session_state typed)
+    cols = st.columns([7, 1, 1])  # input box (value driven by session_state typed)
     chat_text = cols[0].text_input("", value=st.session_state.typed, placeholder="Send a message...", key="chat_input")
     # mic button (render JS widget here so it appears left of Send)
     cols[1].markdown(mic_widget, unsafe_allow_html=True)
     # speak toggle small (we already mirrored to sidebar, but keep small checkbox for quick toggle)
-    cols[2].markdown("
-
-Speak
-", unsafe_allow_html=True)
+    cols[2].markdown("""
+    <input type="checkbox" id="speak_toggle" onchange="window.speakOnReply = this.checked;">
+    <label for="speak_toggle">Speak</label>
+    """, unsafe_allow_html=True)
     submitted = st.form_submit_button("Send")
-JS: parent listens for transcript messages and injects them into the form input and auto-submits the form
-This script must run on the page; it fills the text input and clicks the Send button in the form.
-inject_listener = r"""
 
-""" st.markdown(inject_listener, unsafe_allow_html=True)
+# JS: parent listens for transcript messages and injects them into the form input and auto-submits the form
+# This script must run on the page; it fills the text input and clicks the Send button in the form.
+inject_listener = r"""
+<script>
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'transcript') {
+        const input = document.getElementById('chat_input');
+        if (input) {
+            input.value = event.data.text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const form = input.closest('form');
+            if (form) {
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.click();
+            }
+        }
+    }
+});
+</script>
+"""
+st.markdown(inject_listener, unsafe_allow_html=True)
 
 ---------------------------
 Handle submission
 ---------------------------
 if submitted:
-    text = (st.session_state.get("chat_input","") or "").strip()
+    text = (st.session_state.get("chat_input", "") or "").strip()
     if text:
         # save user message
         save_message(st.session_state.conv_id, st.session_state.user, "user", text)
         # rename conv if default (quick motive)
         try:
-            motive = " ".join([w for w in "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower()).split() if len(w)>2][:4]).capitalize()
+            motive = " ".join([w for w in "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower()).split() if len(w) > 2][:4]).capitalize()
             rename_conversation_if_default(st.session_state.conv_id, motive)
         except Exception:
             pass
 
         # build payload and call LLM
         history = load_messages(st.session_state.conv_id)
-        payload = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
+        payload = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
         for m in history:
             # message DB has 'role' values we stored; pass them as-is
             payload.append({"role": m["role"], "content": m["content"]})
@@ -321,7 +339,7 @@ if submitted:
 
         # optional browser TTS: use sidebar toggle
         if st.session_state.speak_on_reply:
-            safe = html.escape(reply).replace("\n"," ")
+            safe = html.escape(reply).replace("\n", " ")
             components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));}}catch(e){{console.error(e);}}</script>", height=0)
 
         # clear typed stored value so next render the input is empty
@@ -329,9 +347,11 @@ if submitted:
         # Note: we DO NOT mutate st.session_state['chat_input'] after creation; form will re-render using typed as new initial.
         # After processing, re-run will happen naturally (form submission causes rerun).
         st.rerun()  # Added to force immediate UI update
-else: # preserve typed between runs
+else:  # preserve typed between runs
     st.session_state.typed = chat_text or st.session_state.get("typed", "")
 
-st.markdown("
-
-", unsafe_allow_html=True)
+st.markdown("""
+<div class="footer">
+    Powered by Nexa | Built with Streamlit
+</div>
+""", unsafe_allow_html=True)
