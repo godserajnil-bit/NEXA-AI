@@ -148,6 +148,7 @@ st.markdown("""
         .mic-btn { background: #28a745; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; }
         .send-btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; }
         .footer { text-align: center; font-size: 0.9em; color: #666; margin-top: 20px; }
+        .welcome-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); padding: 30px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; text-align: center; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @media (max-width: 768px) { .chat-container { padding: 10px; } .header { padding: 10px; } }
     </style>
@@ -168,40 +169,45 @@ if "logo_shown" not in st.session_state:
     st.session_state.logo_shown = False
 
 # ---------------------------
-# Logo Popup on App Open (New Feature)
+# Logo Popup on App Open (Fixed for Compatibility)
 # ---------------------------
 if not st.session_state.logo_shown:
-    with st.modal("Welcome to Nexa!", clear_on_close=True):
-        st.markdown('<div style="text-align: center; animation: fadeIn 2s;"><h1 class="logo">NX</h1><p>Your AI assistant is ready!</p></div>', unsafe_allow_html=True)
-        if st.button("Get Started"):
-            st.session_state.logo_shown = True
-            st.rerun()
-else:
-    # Sidebar content (unchanged except minor styling)
-    with st.sidebar:
-        st.markdown('<div class="sidebar">', unsafe_allow_html=True)
-        st.markdown("## 🔷 Nexa")
-        st.session_state.user = st.text_input("Display name", st.session_state.user)
-        st.markdown("---")
-        st.markdown("### Conversations")
-        convs = list_conversations(st.session_state.user)
-        if convs:
-            for conv in convs:
-                btn_label = conv["title"] or "New chat"
-                if st.button(btn_label, key=f"conv_{conv['id']}"):
-                    st.session_state.conv_id = conv["id"]
-                    st.experimental_rerun()
-        if st.button("➕ New chat"):
-            st.session_state.conv_id = create_conversation(st.session_state.user)
-            st.experimental_rerun()
-        st.markdown("---")
-        st.session_state.speak_on_reply = st.checkbox("Enable Nexa voice (TTS)", value=st.session_state.speak_on_reply)
-        st.markdown("---")
-        if st.button("🧹 Reset Database"):
-            reset_db()
-            st.session_state.conv_id = create_conversation(st.session_state.user)
-            st.experimental_rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="welcome-overlay">
+        <h1 class="logo">NX</h1>
+        <p>Welcome to Nexa! Your AI assistant is ready.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Get Started", key="dismiss_welcome"):
+        st.session_state.logo_shown = True
+        st.rerun()
+    st.stop()  # Prevent the rest of the app from loading until dismissed
+
+# Sidebar content (unchanged except minor styling)
+with st.sidebar:
+    st.markdown('<div class="sidebar">', unsafe_allow_html=True)
+    st.markdown("## 🔷 Nexa")
+    st.session_state.user = st.text_input("Display name", st.session_state.user)
+    st.markdown("---")
+    st.markdown("### Conversations")
+    convs = list_conversations(st.session_state.user)
+    if convs:
+        for conv in convs:
+            btn_label = conv["title"] or "New chat"
+            if st.button(btn_label, key=f"conv_{conv['id']}"):
+                st.session_state.conv_id = conv["id"]
+                st.experimental_rerun()
+    if st.button("➕ New chat"):
+        st.session_state.conv_id = create_conversation(st.session_state.user)
+        st.experimental_rerun()
+    st.markdown("---")
+    st.session_state.speak_on_reply = st.checkbox("Enable Nexa voice (TTS)", value=st.session_state.speak_on_reply)
+    st.markdown("---")
+    if st.button("🧹 Reset Database"):
+        reset_db()
+        st.session_state.conv_id = create_conversation(st.session_state.user)
+        st.experimental_rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------
 # Page header + welcome + chat area (Updated for Clean UI)
