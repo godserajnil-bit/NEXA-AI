@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 import streamlit as st
 import streamlit.components.v1 as components
 
----------------------------
-Safe IO
----------------------------
+# ---------------------------
+# Safe IO
+# ---------------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     os.environ.setdefault("LANG", "en_US.UTF-8")
@@ -16,17 +16,17 @@ try:
 except Exception:
     pass
 
----------------------------
-Config
----------------------------
+# ---------------------------
+# Config
+# ---------------------------
 st.set_page_config(page_title="Nexa", layout="wide")
 DB_PATH = "nexa.db"
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
----------------------------
-DB helpers (sqlite)
----------------------------
+# ---------------------------
+# DB helpers (sqlite)
+# ---------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -112,9 +112,9 @@ def rename_conversation_if_default(cid, new_title):
         except:
             pass
 
----------------------------
-OpenRouter call (LLM)
----------------------------
+# ---------------------------
+# OpenRouter call (LLM)
+# ---------------------------
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
         return "⚠️ [Offline mode] Nexa simulated reply (no API key)."
@@ -126,9 +126,9 @@ def call_openrouter(messages):
     except Exception as e:
         return f"⚠️ Nexa error: {e}"
 
----------------------------
-Styling (Updated for Clean UI/UX)
----------------------------
+# ---------------------------
+# Styling (Updated for Clean UI/UX)
+# ---------------------------
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
@@ -153,9 +153,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
----------------------------
-Session init
----------------------------
+# ---------------------------
+# Session init
+# ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
@@ -167,9 +167,9 @@ if "speak_on_reply" not in st.session_state:
 if "logo_shown" not in st.session_state:
     st.session_state.logo_shown = False
 
----------------------------
-Logo Popup on App Open (New Feature)
----------------------------
+# ---------------------------
+# Logo Popup on App Open (New Feature)
+# ---------------------------
 if not st.session_state.logo_shown:
     with st.modal("Welcome to Nexa!", clear_on_close=True):
         st.markdown('<div style="text-align: center; animation: fadeIn 2s;"><h1 class="logo">NX</h1><p>Your AI assistant is ready!</p></div>', unsafe_allow_html=True)
@@ -203,9 +203,9 @@ else:
             st.experimental_rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
----------------------------
-Page header + welcome + chat area (Updated for Clean UI)
----------------------------
+# ---------------------------
+# Page header + welcome + chat area (Updated for Clean UI)
+# ---------------------------
 st.markdown('<div class="header">', unsafe_allow_html=True)
 header_col1, header_col2 = st.columns([1, 5])
 with header_col1:
@@ -238,9 +238,9 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<p style="text-align: center; color: #666;">Chat history is shown on the left. Use the mic to speak (desktop Chrome recommended).</p>', unsafe_allow_html=True)
 
----------------------------
-Mic JS (unchanged)
----------------------------
+# ---------------------------
+# Mic JS (unchanged)
+# ---------------------------
 mic_js = r"""
 <script>
 if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
@@ -273,11 +273,11 @@ mic_widget = r"""
 """
 # we won't render mic_widget here; we'll include it in the form area (so its button is next to the send button)
 
----------------------------
-Chat form (so Enter works reliably)
-- Use st.form with form_submit_button to ensure "submit" exists (avoids missing submit-button warnings)
-- Provide initial value from st.session_state.typed
----------------------------
+# ---------------------------
+# Chat form (so Enter works reliably)
+# - Use st.form with form_submit_button to ensure "submit" exists (avoids missing submit-button warnings)
+# - Provide initial value from st.session_state.typed
+# ---------------------------
 with st.form(key="chat_form"):
     cols = st.columns([7, 1, 1])  # input box (value driven by session_state typed)
     chat_text = cols[0].text_input("", value=st.session_state.typed, placeholder="Send a message...", key="chat_input")
@@ -312,9 +312,9 @@ window.addEventListener('message', function(event) {
 """
 st.markdown(inject_listener, unsafe_allow_html=True)
 
----------------------------
-Handle submission
----------------------------
+# ---------------------------
+# Handle submission
+# ---------------------------
 if submitted:
     text = (st.session_state.get("chat_input", "") or "").strip()
     if text:
