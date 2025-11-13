@@ -266,19 +266,36 @@ with st.form("nexa_input_form", clear_on_submit=True):
 # ✅ FIXED: mic now auto-fills & auto-sends
 js_listener = r"""
 <script>
-window.addEventListener('message', (ev)=>{
- if(!ev.data || ev.data.type!=='nexa_transcript') return;
- const text=ev.data.text||'';
- const input=document.querySelector('input[data-testid="stTextInput-input"]') || document.querySelector('input[type="text"]');
- if(input){
-   input.focus();
-   input.value=text;
-   input.dispatchEvent(new Event('input', {bubbles:true}));
-   setTimeout(()=>{
-     const btn=document.querySelector('button[kind="primary"]') || document.querySelector('button');
-     if(btn) btn.click();
-   },400);
- }
+window.addEventListener('message', (ev) => {
+  try {
+    if (!ev.data) return;
+    if (ev.data.type === 'nexa_transcript') {
+      const text = ev.data.text?.trim() || '';
+      if (!text) return;
+
+      // Locate Streamlit's input box (more accurate selector for 2025 version)
+      const input = document.querySelector('input[aria-label="Message"]') 
+                 || document.querySelector('input[data-baseweb="input"]') 
+                 || document.querySelector('input[data-testid="stTextInput-input"]');
+      if (input) {
+        // Inject the recognized text directly into the chat box
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        nativeInputValueSetter.call(input, text);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // Wait 400ms to ensure text_input updates, then click Send automatically
+        setTimeout(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const sendBtn = buttons.find(b => /send/i.test(b.innerText));
+          if (sendBtn) sendBtn.click();
+        }, 400);
+      } else {
+        console.warn("⚠️ Nexa: input not found for speech text");
+      }
+    }
+  } catch(e) {
+    console.error('mic msg handling error', e);
+  }
 });
 </script>
 """
