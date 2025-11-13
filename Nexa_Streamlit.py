@@ -224,11 +224,11 @@ for m in messages:
 st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ---------------------------
-# Mic component HTML (Final Fixed Version)
+# Mic Component HTML (Final Version)
 # ---------------------------
 mic_component = r"""
 <div style="display:flex; gap:8px; align-items:center;">
-  <button id="micLocal" class="mic-btn">🎤</button>
+  <button id="micLocal" class="mic-btn" style="padding:8px 10px; border-radius:8px; background:#0b1220; color:#9fb8c9; border:1px solid #243240; cursor:pointer;">🎤</button>
   <div id="micStatus" style="color:#9fb8c9; font-size:13px;">(Click to speak)</div>
 </div>
 
@@ -255,21 +255,24 @@ mic_component = r"""
   recognition.onstart = () => {
     status.innerText = "(Listening...)";
     btn.innerText = "🛑";
+    btn.style.background = "#ff4444";
   };
 
   recognition.onerror = (e) => {
     status.innerText = "(Error: " + e.error + ")";
     btn.innerText = "🎤";
+    btn.style.background = "#0b1220";
   };
 
   recognition.onend = () => {
     status.innerText = "(Stopped)";
     btn.innerText = "🎤";
+    btn.style.background = "#0b1220";
   };
 
   recognition.onresult = (event) => {
     const text = event.results[0][0].transcript;
-    // send directly to Streamlit via postMessage
+    // Send recognized text to Streamlit listener
     window.parent.postMessage({ type: 'nexa_transcript', text: text }, '*');
   };
 
@@ -294,37 +297,35 @@ with st.form("nexa_input_form", clear_on_submit=True):
     submitted = st.form_submit_button("Send")
 
 # ---------------------------
-# JS listener to capture transcript and send it to chat automatically
+# JS Listener — Receives speech text and sends it automatically
 # ---------------------------
 js_listener = r"""
 <script>
 window.addEventListener('message', (ev) => {
   try {
     if (!ev.data || ev.data.type !== 'nexa_transcript') return;
-    const text = ev.data.text?.trim();
-    if (!text) return;
-
-    // Find the chat input box
-    const input = document.querySelector('input[aria-label="Message"]') 
-               || document.querySelector('input[data-testid="stTextInput-input"]') 
-               || document.querySelector('input[data-baseweb="input"]');
+    const text = ev.data.text || '';
+    // Find Streamlit input element
+    const input = document.querySelector('input[data-baseweb="input"]') ||
+                  document.querySelector('input[data-testid="stTextInput-input"]') ||
+                  document.querySelector('input[role="textbox"]');
 
     if (input) {
-      // Set text programmatically
-      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      nativeSetter.call(input, text);
+      input.focus();
+      input.value = text;
       input.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // Wait a bit, then auto-click Send
-      setTimeout(() => {
-        const sendBtn = Array.from(document.querySelectorAll('button')).find(b => /send/i.test(b.innerText));
-        if (sendBtn) sendBtn.click();
-      }, 500);
+      // Click "Send" button automatically
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const sendBtn = buttons.find(b => /send/i.test(b.innerText));
+      if (sendBtn) {
+        setTimeout(() => sendBtn.click(), 400); // delay to ensure input updates
+      }
     } else {
-      alert("Couldn't find Nexa's chat box. Try refreshing the page.");
+      console.warn("No input field found to insert transcript.");
     }
-  } catch (err) {
-    console.error("Mic message handling failed:", err);
+  } catch (e) {
+    console.error("Mic listener error:", e);
   }
 });
 </script>
