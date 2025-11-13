@@ -224,33 +224,63 @@ for m in messages:
 st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ---------------------------
-# Mic HTML (auto-write + auto-send FIXED)
+# Mic component HTML (Final Fixed Version)
 # ---------------------------
 mic_component = r"""
-<div style="display:flex;gap:8px;align-items:center;">
+<div style="display:flex; gap:8px; align-items:center;">
   <button id="micLocal" class="mic-btn">🎤</button>
-  <div id="micStatus" style="color:#9fb8c9;font-size:13px;">(click to speak)</div>
+  <div id="micStatus" style="color:#9fb8c9; font-size:13px;">(Click to speak)</div>
 </div>
+
 <script>
 (function(){
-  const btn=document.getElementById('micLocal');
-  const status=document.getElementById('micStatus');
-  if(!window.SpeechRecognition && !window.webkitSpeechRecognition){
-    status.innerText="(speech not supported)";
-    btn.disabled=true;
+  const btn = document.getElementById('micLocal');
+  const status = document.getElementById('micStatus');
+  let recognition = null;
+
+  // Check browser support
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    status.innerText = "(Speech not supported in this browser)";
+    btn.disabled = true;
     return;
   }
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  const rec=new SR();
-  rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=1;
-  rec.onstart=()=>{status.innerText="(listening...)";btn.innerText="🛑";};
-  rec.onend=()=>{status.innerText="(stopped)";btn.innerText="🎤";};
-  rec.onerror=e=>{status.innerText="(error) "+e.error;btn.innerText="🎤";};
-  rec.onresult=e=>{
-    const text=e.results[0][0].transcript;
-    window.parent.postMessage({type:'nexa_transcript', text:text}, '*');
+
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    status.innerText = "(Listening...)";
+    btn.innerText = "🛑";
   };
-  btn.onclick=()=>{try{rec.start();setTimeout(()=>{try{rec.stop();}catch(e){}},6000);}catch(e){}};
+
+  recognition.onerror = (e) => {
+    status.innerText = "(Error: " + e.error + ")";
+    btn.innerText = "🎤";
+  };
+
+  recognition.onend = () => {
+    status.innerText = "(Stopped)";
+    btn.innerText = "🎤";
+  };
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    // send directly to Streamlit via postMessage
+    window.parent.postMessage({ type: 'nexa_transcript', text: text }, '*');
+  };
+
+  btn.addEventListener('click', () => {
+    try {
+      recognition.start();
+    } catch (err) {
+      console.log("Mic start error:", err);
+      try { recognition.stop(); } catch(e){}
+    }
+  });
 })();
 </script>
 """
@@ -263,38 +293,38 @@ with st.form("nexa_input_form", clear_on_submit=True):
     user_text = st.text_input("Message", placeholder="Ask Nexa anything...", key="nexa_input")
     submitted = st.form_submit_button("Send")
 
-# ✅ FIXED: mic now auto-fills & auto-sends
+# ---------------------------
+# JS listener to capture transcript and send it to chat automatically
+# ---------------------------
 js_listener = r"""
 <script>
 window.addEventListener('message', (ev) => {
   try {
-    if (!ev.data) return;
-    if (ev.data.type === 'nexa_transcript') {
-      const text = ev.data.text?.trim() || '';
-      if (!text) return;
+    if (!ev.data || ev.data.type !== 'nexa_transcript') return;
+    const text = ev.data.text?.trim();
+    if (!text) return;
 
-      // Locate Streamlit's input box (more accurate selector for 2025 version)
-      const input = document.querySelector('input[aria-label="Message"]') 
-                 || document.querySelector('input[data-baseweb="input"]') 
-                 || document.querySelector('input[data-testid="stTextInput-input"]');
-      if (input) {
-        // Inject the recognized text directly into the chat box
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-        nativeInputValueSetter.call(input, text);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+    // Find the chat input box
+    const input = document.querySelector('input[aria-label="Message"]') 
+               || document.querySelector('input[data-testid="stTextInput-input"]') 
+               || document.querySelector('input[data-baseweb="input"]');
 
-        // Wait 400ms to ensure text_input updates, then click Send automatically
-        setTimeout(() => {
-          const buttons = Array.from(document.querySelectorAll('button'));
-          const sendBtn = buttons.find(b => /send/i.test(b.innerText));
-          if (sendBtn) sendBtn.click();
-        }, 400);
-      } else {
-        console.warn("⚠️ Nexa: input not found for speech text");
-      }
+    if (input) {
+      // Set text programmatically
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      nativeSetter.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // Wait a bit, then auto-click Send
+      setTimeout(() => {
+        const sendBtn = Array.from(document.querySelectorAll('button')).find(b => /send/i.test(b.innerText));
+        if (sendBtn) sendBtn.click();
+      }, 500);
+    } else {
+      alert("Couldn't find Nexa's chat box. Try refreshing the page.");
     }
-  } catch(e) {
-    console.error('mic msg handling error', e);
+  } catch (err) {
+    console.error("Mic message handling failed:", err);
   }
 });
 </script>
