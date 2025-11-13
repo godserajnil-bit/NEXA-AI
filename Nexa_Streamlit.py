@@ -1,10 +1,14 @@
+# Nexa_Streamlit.py
+# Realistic simple Nexa UI with history, mic, Enter-to-send, and browser TTS (no pyttsx3)
+
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 import streamlit as st
 import streamlit.components.v1 as components
+from pathlib import Path
 
 # ---------------------------
-# Safe IO
+# UTF-8 Safe IO
 # ---------------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -17,15 +21,15 @@ except Exception:
     pass
 
 # ---------------------------
-# Config
+# Config + constants
 # ---------------------------
-st.set_page_config(page_title="Nexa", layout="wide")
+st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
 DB_PATH = "nexa.db"
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ---------------------------
-# DB helpers (sqlite)
+# DB utilities
 # ---------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -91,273 +95,306 @@ def save_message(cid, sender, role, content):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute("INSERT INTO messages (conversation_id, sender, role, content, created_at) VALUES (?, ?, ?, ?, ?)", (cid, sender, role, content, ts))
+    c.execute("INSERT INTO messages (conversation_id, sender, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+              (cid, sender, role, content, ts))
     conn.commit()
     conn.close()
 
 def rename_conversation_if_default(cid, new_title):
     if not new_title:
         return
-    try:
-        conn = get_conn()
-        c = conn.cursor()
-        c.execute("SELECT title FROM conversations WHERE id=?", (cid,))
-        row = c.fetchone()
-        if row and (row["title"] == "New chat" or not row["title"]):
-            c.execute("UPDATE conversations SET title=? WHERE id=?", (new_title, cid))
-            conn.commit()
-    finally:
-        try:
-            conn.close()
-        except:
-            pass
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT title FROM conversations WHERE id=?", (cid,))
+    row = c.fetchone()
+    if row and (not row["title"] or row["title"] == "New chat"):
+        c.execute("UPDATE conversations SET title=? WHERE id=?", (new_title, cid))
+        conn.commit()
+    conn.close()
 
 # ---------------------------
-# OpenRouter call (LLM)
+# LLM wrapper (OpenRouter)
 # ---------------------------
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "⚠️ [Offline mode] Nexa simulated reply (no API key)."
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
+        # deterministic offline response for testing
+        return f"🔒 Offline mode — echo: {messages[-1].get('content','')}"
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
     try:
-        r = requests.post("https://openrouter.ai/api/v1/chat/completions", json={"model": MODEL, "messages": messages}, headers=headers, timeout=60)
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json={"model": MODEL, "messages": messages},
+            headers=headers,
+            timeout=60
+        )
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        data = r.json()
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0].get("message", {}).get("content", "") or ""
+        return ""
     except Exception as e:
         return f"⚠️ Nexa error: {e}"
 
 # ---------------------------
-# Styling (Updated for Clean UI/UX)
+# Styling (simple, centered chat)
 # ---------------------------
-st.markdown("""
+st.markdown(
+    """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); color: #333; }
-        .header { text-align: center; padding: 20px; background: rgba(255,255,255,0.9); border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .logo { font-size: 3em; font-weight: 600; color: #4CAF50; animation: fadeIn 2s; }
-        .title { font-size: 2.5em; font-weight: 600; color: #333; }
-        .subtitle { font-size: 1.2em; color: #666; }
-        .welcome { text-align: center; margin: 20px 0; }
-        .example { background: #fff; padding: 10px; border-radius: 10px; margin: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
-        .chat-container { max-width: 800px; margin: 0 auto; padding: 20px; }
-        .user-msg { background: #007bff; color: white; padding: 15px; border-radius: 15px; margin: 10px 0; text-align: right; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .assistant-msg { background: #f1f1f1; color: #333; padding: 15px; border-radius: 15px; margin: 10px 0; text-align: left; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .timestamp { font-size: 0.8em; color: #999; margin-top: 5px; }
-        .sidebar { background: #fff; padding: 15px; border-radius: 10px; }
-        .form-row { display: flex; align-items: center; gap: 10px; }
-        .mic-btn { background: #28a745; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; }
-        .send-btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; }
-        .footer { text-align: center; font-size: 0.9em; color: #666; margin-top: 20px; }
-        .welcome-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); padding: 30px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; text-align: center; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @media (max-width: 768px) { .chat-container { padding: 10px; } .header { padding: 10px; } }
+    .stApp { background:#0d1117; color:#e6f6ff; }
+    .left-panel { padding: 12px; }
+    .brand { font-size:22px; font-weight:700; color:#1f6feb; margin-bottom:8px; }
+    .chat-area { display:flex; justify-content:center; }
+    .chat-window {
+        width: 720px;
+        background: rgba(255,255,255,0.02);
+        padding: 14px;
+        border-radius: 12px;
+        max-height: 70vh;
+        overflow-y: auto;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+    }
+    .msg-user { background:#1f6feb; color:#fff; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-left:auto;}
+    .msg-ai { background:#111827; color:#e6f6ff; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-right:auto;}
+    .input-row { display:flex; gap:8px; margin-top:12px; align-items:center; justify-content:space-between; }
+    .mic-btn { padding:8px 10px; border-radius:8px; background:#0b1220; color:#9fb8c9; border:1px solid #243240; cursor:pointer; }
+    .send-btn { padding:8px 12px; border-radius:8px; background:#1f6feb; color:#fff; border:none; cursor:pointer; }
+    .small-muted { color:#9fb8c9; font-size:13px; margin-top:8px; }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------------------
-# Session init
+# Session state defaults
 # ---------------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = create_conversation(st.session_state.user)
-if "typed" not in st.session_state:
-    st.session_state.typed = ""
 if "speak_on_reply" not in st.session_state:
     st.session_state.speak_on_reply = False
-if "logo_shown" not in st.session_state:
-    st.session_state.logo_shown = False
 
 # ---------------------------
-# Logo Popup on App Open (Fixed for Compatibility)
+# Left sidebar (history + controls)
 # ---------------------------
-if not st.session_state.logo_shown:
-    st.markdown("""
-    <div class="welcome-overlay">
-        <h1 class="logo">NX</h1>
-        <p>Welcome to Nexa! Your AI assistant is ready.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("Get Started", key="dismiss_welcome"):
-        st.session_state.logo_shown = True
-        st.rerun()
-    st.stop()  # Prevent the rest of the app from loading until dismissed
-
-# Sidebar content (unchanged except minor styling)
 with st.sidebar:
-    st.markdown('<div class="sidebar">', unsafe_allow_html=True)
-    st.markdown("## 🔷 Nexa")
-    st.session_state.user = st.text_input("Display name", st.session_state.user)
+    st.markdown('<div class="left-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="brand">Nexa</div>', unsafe_allow_html=True)
+    st.text_input("Display name", value=st.session_state.user, key="sidename")
+    # keep session user in sync
+    st.session_state.user = st.session_state.get("sidename", st.session_state.user)
+
     st.markdown("---")
     st.markdown("### Conversations")
     convs = list_conversations(st.session_state.user)
     if convs:
-        for conv in convs:
-            btn_label = conv["title"] or "New chat"
-            if st.button(btn_label, key=f"conv_{conv['id']}"):
-                st.session_state.conv_id = conv["id"]
-                st.experimental_rerun()
-    if st.button("➕ New chat"):
+        for c in convs:
+            title = c["title"] or "New chat"
+            if st.button(title, key=f"open_{c['id']}"):
+                st.session_state.conv_id = c["id"]
+                # avoid experimental_rerun compatibility issues: use rerun() if present otherwise refresh page
+                try:
+                    st.experimental_rerun()
+                except Exception:
+                    # fallback: reload page by setting a dummy query param
+                    st.experimental_set_query_params(_refresh=str(datetime.utcnow().timestamp()))
+    else:
+        st.info("No conversations yet — press New Chat to start.")
+
+    if st.button("➕ New Chat"):
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.experimental_rerun()
-    st.markdown("---")
-    st.session_state.speak_on_reply = st.checkbox("Enable Nexa voice (TTS)", value=st.session_state.speak_on_reply)
+        try:
+            st.experimental_rerun()
+        except Exception:
+            st.experimental_set_query_params(_refresh=str(datetime.utcnow().timestamp()))
+
     st.markdown("---")
     if st.button("🧹 Reset Database"):
         reset_db()
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.experimental_rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        try:
+            st.experimental_rerun()
+        except Exception:
+            st.experimental_set_query_params(_refresh=str(datetime.utcnow().timestamp()))
+
+    st.markdown("---")
+    st.checkbox("🔊 Nexa speak replies (browser TTS)", key="speak_on_reply")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Page header + welcome + chat area (Updated for Clean UI)
+# Main chat area (centered)
 # ---------------------------
-st.markdown('<div class="header">', unsafe_allow_html=True)
-header_col1, header_col2 = st.columns([1, 5])
-with header_col1:
-    st.markdown('<div class="logo">NX</div>', unsafe_allow_html=True)
-with header_col2:
-    st.markdown('<div class="title">Nexa</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Your AI assistant — ask anything</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<div class="chat-area">', unsafe_allow_html=True)
+st.markdown('<div class="chat-window" id="chatwin">', unsafe_allow_html=True)
 
-st.markdown('<div class="welcome">', unsafe_allow_html=True)
-st.markdown("### Welcome to Nexa")
-st.markdown('<div class="example" onclick="document.getElementById(\'chat_input\').value=\'Explain quantum computing in simple terms\'; document.querySelector(\'button[type=submit]\').click();">💡 Explain quantum computing in simple terms</div>', unsafe_allow_html=True)
-st.markdown('<div class="example" onclick="document.getElementById(\'chat_input\').value=\'Give me creative ideas for a birthday\'; document.querySelector(\'button[type=submit]\').click();">🎉 Give me creative ideas for a birthday</div>', unsafe_allow_html=True)
-st.markdown('<div class="example" onclick="document.getElementById(\'chat_input\').value=\'How to make an HTTP request in JavaScript?\'; document.querySelector(\'button[type=submit]\').click();">💻 How to make an HTTP request in JavaScript?</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Chat window (centered, updated styling)
-st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 messages = load_messages(st.session_state.conv_id)
-if messages:
-    for m in messages:
-        ts = m["created_at"].split("T")[1][:5] if "T" in m["created_at"] else ""
-        if m["role"] == "assistant":
-            st.markdown(f'<div class="assistant-msg">{html.escape(m["content"])}<div class="timestamp">{ts}</div></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="user-msg">{html.escape(m["content"])}<div class="timestamp">{ts}</div></div>', unsafe_allow_html=True)
-else:
-    st.markdown('<div class="assistant-msg">Hello — ask me anything. I can help with code, ideas, explanations and more.</div>', unsafe_allow_html=True)
+if not messages:
+    st.markdown("<div class='small-muted'>Start the conversation — type below and press Enter or Send.</div>", unsafe_allow_html=True)
+
+for m in messages:
+    role = m["role"]
+    content = html.escape(m["content"] or "")
+    if role == "assistant":
+        st.markdown(f"<div class='msg-ai'>{content}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='msg-user'>{content}</div>", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('<p style="text-align: center; color: #666;">Chat history is shown on the left. Use the mic to speak (desktop Chrome recommended).</p>', unsafe_allow_html=True)
+# ---------------------------
+# Mic component HTML
+# ---------------------------
+# This HTML provides a mic button that uses the browser SpeechRecognition API.
+# When it captures a phrase it posts a message to the parent window with {type:'transcript', text: '...'}
+mic_component = r"""
+<div style="display:flex; gap:8px; align-items:center;">
+  <button id="micLocal" class="mic-btn">🎤</button>
+  <div id="micStatus" style="color:#9fb8c9; font-size:13px;">(click to speak)</div>
+</div>
 
-# ---------------------------
-# Mic JS (unchanged)
-# ---------------------------
-mic_js = r"""
 <script>
-if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-    console.warn("Speech recognition not supported");
-} else {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
-    window.startMic = function() {
-        recognition.start();
-    };
-    recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        window.parent.postMessage({type: 'transcript', text: transcript}, '*');
-    };
-    recognition.onerror = function(event) {
-        console.error('Speech recognition error:', event.error);
-    };
-}
+(function(){
+  const btn = document.getElementById('micLocal');
+  const status = document.getElementById('micStatus');
+  let recognition = null;
+  if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+    status.innerText = "(speech not supported)";
+    btn.disabled = true;
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    status.innerText = "(listening...)";
+    btn.innerText = "🛑";
+  };
+  recognition.onerror = (e) => {
+    status.innerText = "(error) " + e.error;
+    btn.innerText = "🎤";
+  };
+  recognition.onend = () => {
+    status.innerText = "(stopped)";
+    btn.innerText = "🎤";
+  };
+
+  recognition.onresult = (evt) => {
+    const text = evt.results[0][0].transcript;
+    // Auto fill Streamlit input and auto submit
+    const input = window.parent.document.querySelector('input[data-baseweb="input"]') 
+               || window.parent.document.querySelector('input[data-testid="stTextInput-input"]') 
+               || window.parent.document.querySelector('input[role="textbox"]');
+    if (input) {
+      input.focus();
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      // Auto click Send button
+      const buttons = Array.from(window.parent.document.querySelectorAll('button'));
+      const sendBtn = buttons.find(b => /send/i.test(b.innerText));
+      if (sendBtn) sendBtn.click();
+    }
+  };
+
+  btn.addEventListener('click', () => {
+    if (!recognition) return;
+    try {
+      recognition.start();
+      // Auto stop after 7 seconds
+      setTimeout(()=>{ try{ recognition.stop(); } catch(e){} }, 7000);
+    } catch(e) {}
+  });
+})();
 </script>
 """
-st.markdown(mic_js, unsafe_allow_html=True)
 
-# Mic button and listener HTML (this starts Web SpeechRecognition, records ~6s, posts transcript to parent)
-mic_widget = r"""
-<button class="mic-btn" onclick="window.startMic()">🎤</button>
-"""
-# we won't render mic_widget here; we'll include it in the form area (so its button is next to the send button)
+# Render mic component (this will be an iframe that can postMessage to parent)
+components.html(mic_component, height=80)
 
 # ---------------------------
-# Chat form (so Enter works reliably)
-# - Use st.form with form_submit_button to ensure "submit" exists (avoids missing submit-button warnings)
-# - Provide initial value from st.session_state.typed
+# Input form (uses st.form to allow Enter-to-submit and clear_on_submit)
 # ---------------------------
-with st.form(key="chat_form"):
-    cols = st.columns([7, 1, 1])  # input box (value driven by session_state typed)
-    chat_text = cols[0].text_input("", value=st.session_state.typed, placeholder="Send a message...", key="chat_input")
-    # mic button (render JS widget here so it appears left of Send)
-    cols[1].markdown(mic_widget, unsafe_allow_html=True)
-    # speak toggle small (we already mirrored to sidebar, but keep small checkbox for quick toggle)
-    cols[2].markdown("""
-    <input type="checkbox" id="speak_toggle" onchange="window.speakOnReply = this.checked;">
-    <label for="speak_toggle">Speak</label>
-    """, unsafe_allow_html=True)
-    submitted = st.form_submit_button("Send")
+with st.form("nexa_input_form", clear_on_submit=True):
+    cols = st.columns([10, 1])
+    user_text = cols[0].text_input("Message", placeholder="Ask Nexa anything and press Enter ↵", key="nexa_input")
+    submit = cols[1].form_submit_button("Send")
 
-# JS: parent listens for transcript messages and injects them into the form input and auto-submits the form
-# This script must run on the page; it fills the text input and clicks the Send button in the form.
-inject_listener = r"""
+    # When form is submitted (Enter or Send), this block will run after the `with` context ends
+# (form submission handling below)
+
+# ---------------------------
+# Listen for mic transcript messages from components.html
+# ---------------------------
+# The following JS listener is injected once — it listens for postMessage events from the mic iframe
+# and programmatically fills the Streamlit text_input and clicks Send (works in same-origin contexts).
+js_listener = r"""
 <script>
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'transcript') {
-        const input = document.getElementById('chat_input');
-        if (input) {
-            input.value = event.data.text;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            const form = input.closest('form');
-            if (form) {
-                const submitBtn = form.querySelector('button[type="submit"]');
-                if (submitBtn) submitBtn.click();
-            }
+window.addEventListener('message', (ev) => {
+  try {
+    if (!ev.data) return;
+    if (ev.data.type === 'nexa_transcript') {
+      const text = ev.data.text || '';
+      // find the text input created by Streamlit (best-effort selectors)
+      const input = document.querySelector('input[data-baseweb="input"]') || document.querySelector('input[data-testid="stTextInput-input"]') || document.querySelector('input[role="textbox"]');
+      if (input) {
+        input.focus();
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        // try to find the Send button in the same form and click it
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const sendBtn = buttons.find(b => /send/i.test(b.innerText));
+        if (sendBtn) {
+          sendBtn.click();
         }
+      } else {
+        // fallback: copy to clipboard and notify user
+        navigator.clipboard && navigator.clipboard.writeText(text);
+        alert('Transcript copied to clipboard — paste into the input and press Send.');
+      }
     }
+  } catch(e) {
+    console.error('mic msg handling error', e);
+  }
 });
 </script>
 """
-st.markdown(inject_listener, unsafe_allow_html=True)
+components.html(js_listener, height=0)
 
 # ---------------------------
-# Handle submission
+# Handle form submission (Enter or Send)
 # ---------------------------
-if submitted:
-    text = (st.session_state.get("chat_input", "") or "").strip()
-    if text:
-        # save user message
-        save_message(st.session_state.conv_id, st.session_state.user, "user", text)
-        # rename conv if default (quick motive)
-        try:
-            motive = " ".join([w for w in "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text.lower()).split() if len(w) > 2][:4]).capitalize()
-            rename_conversation_if_default(st.session_state.conv_id, motive)
-        except Exception:
-            pass
+if submit and user_text and user_text.strip():
+    content = user_text.strip()
+    # save user message
+    save_message(st.session_state.conv_id, st.session_state.user, "user", content)
+    # rename convo if default
+    rename_conversation_if_default(st.session_state.conv_id, content.split("\n", 1)[0][:40])
+    # build history for LLM
+    history = load_messages(st.session_state.conv_id)
+    payload = [{"role":"system", "content":"You are Nexa, a helpful assistant."}]
+    for m in history:
+        role = "assistant" if m["role"] == "assistant" else "user"
+        payload.append({"role": role, "content": m["content"]})
+    # call LLM (may block briefly)
+    with st.spinner("Nexa is thinking..."):
+        reply = call_openrouter(payload)
+    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-        # build payload and call LLM
-        history = load_messages(st.session_state.conv_id)
-        payload = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
-        for m in history:
-            # message DB has 'role' values we stored; pass them as-is
-            payload.append({"role": m["role"], "content": m["content"]})
-        with st.spinner("Nexa is thinking..."):
-            reply = call_openrouter(payload)
-        save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    # Browser TTS if enabled
+    if st.session_state.get("speak_on_reply", False):
+        safe_reply = html.escape(reply).replace("\n", " ")
+        tts_script = f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe_reply}'));}}catch(e){{console.error(e);}}</script>"
+        components.html(tts_script, height=0)
 
-        # optional browser TTS: use sidebar toggle
-        if st.session_state.speak_on_reply:
-            safe = html.escape(reply).replace("\n", " ")
-            components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));}}catch(e){{console.error(e);}}</script>", height=0)
+    # refresh UI to show new messages (use experimental_rerun if available; fallback to setting a query param)
+    try:
+        st.experimental_rerun()
+    except Exception:
+        st.experimental_set_query_params(_refresh=str(datetime.utcnow().timestamp()))
 
-        # clear typed stored value so next render the input is empty
-        st.session_state.typed = ""
-        # Note: we DO NOT mutate st.session_state['chat_input'] after creation; form will re-render using typed as new initial.
-        # After processing, re-run will happen naturally (form submission causes rerun).
-        st.rerun()  # Added to force immediate UI update
-else:  # preserve typed between runs
-    st.session_state.typed = chat_text or st.session_state.get("typed", "")
-
-st.markdown("""
-<div class="footer">
-    Powered by Nexa | Built with Streamlit
-</div>
-""", unsafe_allow_html=True)
+# End of file
