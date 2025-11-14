@@ -273,33 +273,26 @@ window.addEventListener('message', (ev)=>{
     if(!ev.data || ev.data.type!=='nexa_transcript') return;
     const text = ev.data.text || '';
 
-    // try a few selectors (works across Streamlit versions + mobile)
+    // find the input
     let input = document.querySelector('input[data-testid="stTextInput-input"]')
-             || document.querySelector('input[data-baseweb="input"]')
              || document.querySelector('input[type="text"]')
-             || document.querySelector('input[role="textbox"]')
              || document.querySelector('input');
 
-    if(!input){
-      console.warn('Nexa: input not found for transcript');
-      return;
-    }
+    if(!input){ return; }
 
-    // set value and trigger input event
     input.focus();
     input.value = text;
     input.dispatchEvent(new Event('input', {bubbles:true}));
 
-    // find a "Send" button in same form or globally
-    const candidateButtons = Array.from(document.querySelectorAll('button'));
-    let sendBtn = candidateButtons.find(b => /^\s*send\s*$/i.test(b.innerText || ''));
-    if(!sendBtn){
-      // fallback: pick button with aria-label or title containing 'send'
-      sendBtn = candidateButtons.find(b => /send/i.test(b.getAttribute('aria-label') || '') || /send/i.test(b.title || ''));
+    // --- 100% FIX: locate ONLY the send button inside the same form ---
+    const form = input.closest('form');
+    if(form){
+        const sendBtn = form.querySelector('button[type="submit"]');
+        if(sendBtn){
+            setTimeout(()=> sendBtn.click(), 150);
+        }
     }
-    if(sendBtn){
-      setTimeout(()=>sendBtn.click(), 200);
-    }
+
   }catch(e){
     console.error('Nexa listener error', e);
   }
