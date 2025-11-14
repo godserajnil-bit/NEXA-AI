@@ -186,20 +186,20 @@ with st.sidebar:
             title = c["title"] or "New chat"
             if st.button(title, key=f"open_{c['id']}"):
                 st.session_state.conv_id = c["id"]
-                st.rerun()
+                # no forced rerun; Streamlit will refresh on next interaction
     else:
         st.info("No conversations yet — press New Chat to start.")
 
     # ✅ FIXED: new chat instantly opens properly
     if st.button("➕ New Chat"):
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        # no forced rerun
 
     st.markdown("---")
     if st.button("🧹 Reset Database"):
         reset_db()
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        # no forced rerun
 
     st.markdown("---")
     st.checkbox("🔊 Nexa speak replies (browser TTS)", key="speak_on_reply")
@@ -263,47 +263,92 @@ with st.form("nexa_input_form", clear_on_submit=True):
     user_text = st.text_input("Message", placeholder="Ask Nexa anything...", key="nexa_input")
     submitted = st.form_submit_button("Send")
 
-# ✅ FIXED: mic now auto-fills & auto-sends
+# ---------------------------
+# JS listener — robust insertion + click
+# ---------------------------
 js_listener = r"""
 <script>
 window.addEventListener('message', (ev)=>{
- if(!ev.data || ev.data.type!=='nexa_transcript') return;
- const text=ev.data.text||'';
- const input=document.querySelector('input[data-testid="stTextInput-input"]') || document.querySelector('input[type="text"]');
- if(input){
-   input.focus();
-   input.value=text;
-   input.dispatchEvent(new Event('input', {bubbles:true}));
-   setTimeout(()=>{
-     const btn=document.querySelector('button[kind="primary"]') || document.querySelector('button');
-     if(btn) btn.click();
-   },400);
- }
+  try{
+    if(!ev.data || ev.data.type!=='nexa_transcript') return;
+    const text = ev.data.text || '';
+
+    // try a few selectors (works across Streamlit versions + mobile)
+    let input = document.querySelector('input[data-testid="stTextInput-input"]')
+             || document.querySelector('input[data-baseweb="input"]')
+             || document.querySelector('input[type="text"]')
+             || document.querySelector('input[role="textbox"]')
+             || document.querySelector('input');
+
+    if(!input){
+      console.warn('Nexa: input not found for transcript');
+      return;
+    }
+
+    // set value and trigger input event
+    input.focus();
+    input.value = text;
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+
+    // find a "Send" button in same form or globally
+    const candidateButtons = Array.from(document.querySelectorAll('button'));
+    let sendBtn = candidateButtons.find(b => /^\s*send\s*$/i.test(b.innerText || ''));
+    if(!sendBtn){
+      // fallback: pick button with aria-label or title containing 'send'
+      sendBtn = candidateButtons.find(b => /send/i.test(b.getAttribute('aria-label') || '') || /send/i.test(b.title || ''));
+    }
+    if(sendBtn){
+      setTimeout(()=>sendBtn.click(), 200);
+    }
+  }catch(e){
+    console.error('Nexa listener error', e);
+  }
 });
 </script>
 """
 components.html(js_listener, height=0)
 
 # ---------------------------
+# simple commands: open youtube/google
+# ---------------------------
+def handle_simple_commands_and_maybe_open(text):
+    low = text.strip().lower()
+    if low.startswith("open youtube"):
+        components.html("<script>window.open('https://www.youtube.com','_blank');</script>", height=0)
+        return "✅ Opening YouTube..."
+    if low.startswith("open google"):
+        components.html("<script>window.open('https://www.google.com','_blank');</script>", height=0)
+        return "✅ Opening Google..."
+    return None
+
+# ---------------------------
 # Handle message submission
 # ---------------------------
 if submitted and user_text and user_text.strip():
-    text=user_text.strip()
+    text = user_text.strip()
     save_message(st.session_state.conv_id, st.session_state.user, "user", text)
     rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
 
-    history=load_messages(st.session_state.conv_id)
-    payload=[{"role":"system","content":"You are Nexa, a helpful assistant."}]
-    for m in history:
-        payload.append({"role":m["role"],"content":m["content"]})
+    # handle simple commands before calling LLM
+    cmd_reply = handle_simple_commands_and_maybe_open(text)
+    if cmd_reply is not None:
+        save_message(st.session_state.conv_id, "Nexa", "assistant", cmd_reply)
+        if st.session_state.get("speak_on_reply", False):
+            safe = html.escape(cmd_reply).replace("\n"," ")
+            components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));}}catch(e){{}}</script>", height=0)
+    else:
+        history = load_messages(st.session_state.conv_id)
+        payload = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
+        for m in history:
+            role = "assistant" if m["role"] == "assistant" else "user"
+            payload.append({"role": role, "content": m["content"]})
 
-    with st.spinner("Nexa is thinking..."):
-        reply=call_openrouter(payload)
-    save_message(st.session_state.conv_id,"Nexa","assistant",reply)
+        with st.spinner("Nexa is thinking..."):
+            reply = call_openrouter(payload)
+        save_message(st.session_state.conv_id,"Nexa","assistant",reply)
 
-    if st.session_state.get("speak_on_reply",False):
-        safe=html.escape(reply).replace("\n"," ")
-        tts=f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
-        components.html(tts,height=0)
+        if st.session_state.get("speak_on_reply", False):
+            safe = html.escape(reply).replace("\n"," ")
+            components.html(f"<script>try{{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));}}catch(e){{}}</script>", height=0)
 
-    st.rerun()
+# End of file
