@@ -296,27 +296,33 @@ window.addEventListener('message', (ev) => {
   try {
     if (!ev.data || ev.data.type !== 'nexa_transcript') return;
     const text = ev.data.text || '';
-    // Best-effort selectors for Streamlit input created above
-    const input = document.querySelector('input[data-baseweb="input"]') ||
-                  document.querySelector('input[data-testid="stTextInput-input"]') ||
-                  document.querySelector('input[role="textbox"]');
+
+    // NEW universal Streamlit selector (works on laptop + mobile)
+    const input = document.querySelector('input[type="text"]') ||
+                  document.querySelector('input[role="textbox"]') ||
+                  document.querySelector('input');
+
     if (input) {
       input.focus();
       input.value = text;
+
+      // Force Streamlit to register Vue/React input event
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      // find a button that appears like "Send" in form and click it
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const sendBtn = buttons.find(b => /send/i.test(b.innerText));
+
+      // Find Send button
+      const buttons = Array.from(document.querySelectorAll("button"));
+      const sendBtn =
+        buttons.find(b => b.innerText.trim().toLowerCase() === "send");
+
       if (sendBtn) {
-        setTimeout(()=> sendBtn.click(), 250); // short delay so input value settles
+        setTimeout(() => sendBtn.click(), 200);
       }
     } else {
-      // fallback: copy text to clipboard
-      try { navigator.clipboard && navigator.clipboard.writeText(text); } catch(e){};
-      alert('Transcript copied: ' + text + '\\nPaste into the input if it did not auto-insert.');
+      alert("Mic recognized: " + text + "\\nbut input not found.");
     }
-  } catch(e) {
-    console.error('mic listener error', e);
+
+  } catch (e) {
+    console.error("listener error", e);
   }
 });
 </script>
