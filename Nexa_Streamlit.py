@@ -170,6 +170,16 @@ if "speak_on_reply" not in st.session_state:
     st.session_state.speak_on_reply = False
 
 # ---------------------------
+# Safe refresh helper (no experimental_rerun)
+# ---------------------------
+def safe_refresh():
+    try:
+        st.experimental_set_query_params(_refresh=str(datetime.utcnow().timestamp()))
+    except Exception:
+        # last-resort: do nothing (rare runtimes) — page may update on next interaction
+        pass
+
+# ---------------------------
 # Sidebar (conversation history)
 # ---------------------------
 with st.sidebar:
@@ -186,20 +196,20 @@ with st.sidebar:
             title = c["title"] or "New chat"
             if st.button(title, key=f"open_{c['id']}"):
                 st.session_state.conv_id = c["id"]
-                st.rerun()
+                safe_refresh()
     else:
         st.info("No conversations yet — press New Chat to start.")
 
     # ✅ FIXED: new chat instantly opens properly
     if st.button("➕ New Chat"):
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        safe_refresh()
 
     st.markdown("---")
     if st.button("🧹 Reset Database"):
         reset_db()
         st.session_state.conv_id = create_conversation(st.session_state.user)
-        st.rerun()
+        safe_refresh()
 
     st.markdown("---")
     st.checkbox("🔊 Nexa speak replies (browser TTS)", key="speak_on_reply")
@@ -336,22 +346,24 @@ components.html(js_listener, height=0)
 # Handle message submission
 # ---------------------------
 if submitted and user_text and user_text.strip():
-    text=user_text.strip()
+    text = user_text.strip()
     save_message(st.session_state.conv_id, st.session_state.user, "user", text)
-    rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
+    rename_conversation_if_default(st.session_state.conv_id, text.split("\n", 1)[0][:40])
 
-    history=load_messages(st.session_state.conv_id)
-    payload=[{"role":"system","content":"You are Nexa, a helpful assistant."}]
+    history = load_messages(st.session_state.conv_id)
+    payload = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
     for m in history:
         payload.append({"role":m["role"],"content":m["content"]})
 
     with st.spinner("Nexa is thinking..."):
-        reply=call_openrouter(payload)
+        reply = call_openrouter(payload)
     save_message(st.session_state.conv_id,"Nexa","assistant",reply)
 
     if st.session_state.get("speak_on_reply",False):
-        safe=html.escape(reply).replace("\n"," ")
-        tts=f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
+        safe = html.escape(reply).replace("\n"," ")
+        tts = f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
         components.html(tts,height=0)
 
-    st.rerun()
+    # safe refresh instead of st.rerun()
+    safe_refresh()
+# End of file
