@@ -136,29 +136,88 @@ def call_openrouter(messages):
 st.markdown("""
 <style>
 
-.outer { display:flex; width:100%; height:100vh; overflow:hidden; }
+html, body, .main, .block-container {
+    height: 100%;
+    overflow: hidden;
+}
+
+/* MAIN OUTER FIX — allow internal areas to scroll */
+.outer {
+    display:flex;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+}
+
 .left-col {
-    width:90px; background:#0a8f8a; color:white;
-    display:flex; align-items:center; justify-content:center;
-    font-size:30px; font-weight:bold; border-right:3px solid #0f7070;
+    width:90px;
+    background:#0a8f8a;
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:30px;
+    font-weight:bold;
+    border-right:3px solid #0f7070;
 }
-.center-wrap { flex:1; background:#dbefff; padding:15px; }
-.frame { border:4px solid black; height:100%; background:white; display:flex; }
+
+.center-wrap {
+    flex:1;
+    background:#dbefff;
+    padding:0;
+    overflow:hidden;
+}
+
+.frame {
+    border:4px solid black;
+    height:100%;
+    background:white;
+    display:flex;
+    overflow:hidden; /* IMPORTANT FIX */
+}
+
+/* SIDEBAR scroll fix */
 .menu-panel {
-    width:260px; border-right:3px solid #ccc; background:#fafafa; padding:20px; overflow-y:auto;
+    width:260px;
+    border-right:3px solid #ccc;
+    background:#fafafa;
+    padding:20px;
+    overflow-y:auto;
+    max-height:100%;
 }
+
+/* CHAT scroll fix */
 .main-area {
-    flex:1; padding:20px; overflow-y:auto; height:100%;
+    flex:1;
+    padding:20px;
+    overflow-y:auto;
+    height:100%;
 }
+
+/* Messages */
 .msg-user {
-    background:#c6e6ff; padding:12px; margin:8px 0; border-radius:12px; max-width:80%;
+    background:#c6e6ff;
+    padding:12px;
+    margin:8px 0;
+    border-radius:12px;
+    max-width:80%;
 }
+
 .msg-ai {
-    background:#eee; padding:12px; margin:8px 0; border-radius:12px; max-width:80%;
+    background:#eee;
+    padding:12px;
+    margin:8px 0;
+    border-radius:12px;
+    max-width:80%;
 }
+
 .mic-btn {
-    width:40px; height:40px; border-radius:50%; font-size:20px;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    font-size:20px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
