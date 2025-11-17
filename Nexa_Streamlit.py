@@ -1,34 +1,35 @@
-# Nexa Streamlit — Full UI + DB + Mic + Chat + Sidebar + Rerun (NO experimental rerun)
+# Nexa_Streamlit.py
+# Fixed — simple UI, visible at top (no big blank space), working sidebar, mic, DB, LLM wrapper, st.rerun used.
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --------------------------------------------------------
-# UTF-8 I/O FIX
-# --------------------------------------------------------
+# --------------------
+# UTF-8 I/O safe
+# --------------------
 try:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     if hasattr(sys.stdout, "buffer"):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "buffer"):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-except:
+except Exception:
     pass
 
-# --------------------------------------------------------
-# CONFIG
-# --------------------------------------------------------
+# --------------------
+# Config
+# --------------------
 st.set_page_config(page_title="Nexa", layout="wide", initial_sidebar_state="expanded")
 
 DB_PATH = "nexa.db"
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# --------------------------------------------------------
-# DATABASE
-# --------------------------------------------------------
+# --------------------
+# Database helpers
+# --------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -97,6 +98,8 @@ def save_message(cid, sender, role, content):
     conn.close()
 
 def rename_conversation_if_default(cid, new_title):
+    if not new_title:
+        return
     conn = get_conn()
     c = conn.cursor()
     c.execute("SELECT title FROM conversations WHERE id=?", (cid,))
@@ -106,133 +109,53 @@ def rename_conversation_if_default(cid, new_title):
         conn.commit()
     conn.close()
 
-# --------------------------------------------------------
-# LLM API
-# --------------------------------------------------------
+# --------------------
+# LLM wrapper (OpenRouter)
+# --------------------
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
-        return "Offline mode — No API key"
+        return f"🔒 Offline mode — echo: {messages[-1].get('content','')}"
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
     try:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             json={"model": MODEL, "messages": messages},
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            headers=headers,
             timeout=60
         )
         r.raise_for_status()
         data = r.json()
-        return data["choices"][0]["message"]["content"]
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0].get("message", {}).get("content", "") or ""
+        return ""
     except Exception as e:
-        return f"⚠️ Error: {e}"
+        return f"⚠️ Nexa error: {e}"
 
-# --------------------------------------------------------
-# CSS (full, no shortcuts)
-# --------------------------------------------------------
-st.markdown("""
-<style>
+# --------------------
+# Simple CSS (avoid large heights / big margins)
+# --------------------
+st.markdown(
+    """
+    <style>
+      /* ensure content begins near top and is simple */
+      .stApp { background: #0b1113; color: #e6f6ff; }
+      header { display:none; } /* optional: hide top header to keep UI compact */
+      .main > div { padding-top: 6px; } /* small top padding */
+      .msg-user { background:#14a37f; color:#001b12; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-left:auto;}
+      .msg-ai { background:#07101a; color:#dff5ee; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-right:auto;}
+      .welcome-box { text-align:center; margin-top:12px; color:#cfe8ee; }
+      .menu-panel { padding:10px; }
+      .mic-btn { padding:6px 10px; border-radius:8px; background:#0b1220; color:#cfe8ee; border:1px solid rgba(255,255,255,0.04); cursor:pointer; }
+      .input-row { display:flex; gap:8px; align-items:center; width:100%; }
+      .input-text { flex:1; padding:8px; border-radius:8px; border:1px solid #2b3942; background: #0f1720; color:#e6f6ff; }
+      .send-btn { padding:8px 12px; border-radius:8px; background:#14a37f; color:#001b12; font-weight:700; border:none; cursor:pointer; }
+      footer { visibility:hidden; } /* hide Streamlit footer for cleaner look */
+    </style>
+    """, unsafe_allow_html=True)
 
-body {
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
-}
-
-.outer {
-    display: flex;
-    width: 100%;
-    height: 100vh;
-    overflow: hidden;
-}
-
-/* Left teal column */
-.left-col {
-    width: 90px;
-    background: #0a8f8a;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-top: 25px;
-    gap: 25px;
-    color: white;
-    font-size: 28px;
-    font-weight: bold;
-    letter-spacing: 2px;
-    border-right: 3px solid #0f7070;
-}
-
-/* Center frame border */
-.center-wrap {
-    width: 100%;
-    height: 100%;
-    background: #dbefff;
-    padding: 20px;
-    box-sizing: border-box;
-}
-
-.frame {
-    border: 5px solid black;
-    width: 100%;
-    height: 100%;
-    background: white;
-    display: flex;
-    flex-direction: row;
-}
-
-/* Chat shell */
-.chat-shell {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-}
-
-/* Sidebar inside center */
-.menu-panel {
-    width: 280px;
-    border-right: 3px solid #cccccc;
-    background: #fafafa;
-    padding: 20px;
-}
-
-/* Main chat */
-.main-area {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-}
-
-/* Messages */
-.messages {
-    width: 100%;
-}
-
-.msg-user {
-    background: #c6e6ff;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 12px;
-    max-width: 80%;
-}
-
-.msg-ai {
-    background: #eee;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 12px;
-    max-width: 80%;
-}
-
-.welcome-box {
-    text-align: center;
-    width: 100%;
-    margin-top: 100px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# --------------------------------------------------------
-# SESSION INIT
-# --------------------------------------------------------
+# --------------------
+# Session init
+# --------------------
 if "user" not in st.session_state:
     st.session_state.user = "You"
 if "conv_id" not in st.session_state:
@@ -240,124 +163,150 @@ if "conv_id" not in st.session_state:
 if "speak_on_reply" not in st.session_state:
     st.session_state.speak_on_reply = False
 
-# --------------------------------------------------------
-# LAYOUT START
-# --------------------------------------------------------
-st.markdown('<div class="outer">', unsafe_allow_html=True)
+# --------------------
+# Sidebar (use Streamlit sidebar for stability)
+# --------------------
+with st.sidebar:
+    st.markdown("## 🟦 Nexa")
+    st.text_input("Display name", value=st.session_state.user, key="sidename")
+    st.session_state.user = st.session_state.get("sidename", st.session_state.user)
 
-# LEFT COLUMN
-st.markdown('<div class="left-col">NX</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### Conversations")
+    convs = list_conversations(st.session_state.user)
+    if convs:
+        for c in convs:
+            title = c["title"] or "New chat"
+            if st.button(title, key=f"open_{c['id']}"):
+                st.session_state.conv_id = c["id"]
+                st.rerun()
+    else:
+        st.info("No conversations yet — press New Chat to start.")
 
-# CENTER FRAME
-st.markdown('<div class="center-wrap"><div class="frame"><div class="chat-shell">', unsafe_allow_html=True)
-
-# SIDEBAR INSIDE MAIN
-st.markdown('<div class="menu-panel">', unsafe_allow_html=True)
-
-# List chats
-convs = list_conversations(st.session_state.user)
-st.markdown("### Chats")
-
-for c in convs:
-    title = c["title"]
-    if st.button(title, key=f"c_{c['id']}"):
-        st.session_state.conv_id = c["id"]
+    if st.button("➕ New Chat"):
+        st.session_state.conv_id = create_conversation(st.session_state.user)
         st.rerun()
 
-if st.button("New Chat"):
-    st.session_state.conv_id = create_conversation(st.session_state.user)
-    st.rerun()
+    if st.button("🧹 Reset Database"):
+        reset_db()
+        st.session_state.conv_id = create_conversation(st.session_state.user)
+        st.rerun()
 
-if st.button("Reset DB"):
-    reset_db()
-    st.session_state.conv_id = create_conversation(st.session_state.user)
-    st.rerun()
+    st.markdown("---")
+    st.checkbox("🔊 Nexa speak replies (browser TTS)", key="speak_on_reply")
+    st.markdown("### Quick actions")
+    if st.button("Open YouTube"):
+        components.html("<script>window.open('https://www.youtube.com','_blank');</script>", height=0)
+    if st.button("Open Google"):
+        components.html("<script>window.open('https://www.google.com','_blank');</script>", height=0)
 
-st.markdown('</div>', unsafe_allow_html=True)
+# --------------------
+# Main content
+# --------------------
+st.markdown("<div style='display:flex;gap:20px;align-items:flex-start;'>", unsafe_allow_html=True)
 
-# MAIN AREA
-st.markdown('<div class="main-area">', unsafe_allow_html=True)
+# Left small visual column (keeps previous left-col feel but simple)
+st.markdown("""
+<div style="width:84px;padding:8px;">
+  <div style="width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-weight:800;">N</div>
+</div>
+""", unsafe_allow_html=True)
 
+# Chat area
+st.markdown("<div style='flex:1;min-width:320px;'>", unsafe_allow_html=True)
+
+# Load and show messages or welcome
 messages = load_messages(st.session_state.conv_id)
-
-if len(messages) == 0:
-    st.markdown("""
-        <div class="welcome-box">
-            <h1>Hello, I’m Nexa 👋</h1>
-            <p>Ask anything to begin.</p>
-        </div>
-    """, unsafe_allow_html=True)
+if not messages:
+    st.markdown("<div class='welcome-box'><h2 style='margin:6px 0 4px 0;'>Welcome to Nexa</h2><div>Start the conversation — type below or press 🎤</div></div>", unsafe_allow_html=True)
 else:
-    st.markdown('<div class="messages">', unsafe_allow_html=True)
     for m in messages:
-        text = html.escape(m["content"])
-        if m["role"] == "assistant":
-            st.markdown(f"<div class='msg-ai'>{text}</div>", unsafe_allow_html=True)
+        role = m["role"]
+        content = html.escape(m["content"] or "")
+        if role == "assistant":
+            st.markdown(f"<div class='msg-ai'>{content}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='msg-user'>{text}</div>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f"<div class='msg-user'>{content}</div>", unsafe_allow_html=True)
 
-# --------------------------------------------------------
-# MIC COMPONENT
-# --------------------------------------------------------
-components.html("""
-<script>
-function startDictation() {
-    if (!('webkitSpeechRecognition' in window)) {
-        alert("Speech Recognition not supported");
-    } else {
-        var recognition = new webkitSpeechRecognition();
-        recognition.lang = "en-US";
-        recognition.onresult = function(event) {
-            const text = event.results[0][0].transcript;
-            window.parent.postMessage({type:'speech_text', data:text}, "*");
-        };
-        recognition.start();
-    }
-}
-</script>
-<button onclick="startDictation()" style="padding:10px;">🎤 Speak</button>
-""", height=80)
+# Input row with mic button and text input (keeps behaviour simple)
+st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+with st.form("nexa_input_form", clear_on_submit=True):
+    cols = st.columns([0.06, 0.82, 0.12])
+    with cols[0]:
+        # Mic button that triggers browser speech recognition and posts message to parent
+        mic_html = r"""
+        <div style="display:flex;justify-content:center;">
+          <button id="micLocal" class="mic-btn">🎤</button>
+        </div>
+        <script>
+        (function(){
+          const btn=document.getElementById('micLocal');
+          if(!window.SpeechRecognition && !window.webkitSpeechRecognition){
+            btn.disabled=true;
+            return;
+          }
+          const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+          const rec=new SR();
+          rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=1;
+          rec.onresult=e=>{
+            const text=e.results[0][0].transcript;
+            window.parent.postMessage({type:'nexa_transcript', text:text}, '*');
+          };
+          btn.onclick=()=>{try{rec.start();setTimeout(()=>{try{rec.stop();}catch(e){}},6000);}catch(e){}};
+        })();
+        </script>
+        """
+        components.html(mic_html, height=48)
+    with cols[1]:
+        user_text = st.text_input("", placeholder="Ask Nexa anything...", key="nexa_input")
+    with cols[2]:
+        submitted = st.form_submit_button("Send", help="Send message")
 
-# Receive mic input
-components.html("""
+# JS listener to auto-fill input when mic transcript arrives and auto-submit
+components.html(r"""
 <script>
-window.addEventListener("message", (event) => {
-    if (event.data.type === "speech_text") {
-        const input = window.parent.document.querySelector('input[type="text"]');
-        if (input) {
-            input.value = event.data.data;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-    }
+window.addEventListener('message', (ev)=>{
+ if(!ev.data || ev.data.type!=='nexa_transcript') return;
+ const text=ev.data.text||'';
+ const input = document.querySelector('input[data-testid="stTextInput-input"]') || document.querySelector('input[type="text"]');
+ if(input){
+   input.focus();
+   input.value = text;
+   input.dispatchEvent(new Event('input', {bubbles:true}));
+   // find submit button in forms and click (best-effort)
+   setTimeout(()=>{
+     const forms = document.querySelectorAll('form');
+     for(const f of forms){
+       const btn = f.querySelector('button[kind="primary"], button[type="submit"], button');
+       if(btn && /send/i.test(btn.innerText || '')) { btn.click(); break; }
+     }
+   }, 250);
+ }
 });
 </script>
 """, height=0)
 
-# --------------------------------------------------------
-# INPUT BOX
-# --------------------------------------------------------
-with st.form("ask_form", clear_on_submit=True):
-    user_text = st.text_input("Ask Nexa…")
-    submitted = st.form_submit_button("Send")
-
-# --------------------------------------------------------
-# HANDLE CHAT INPUT
-# --------------------------------------------------------
-if submitted and user_text.strip():
+# Handle submission
+if submitted and user_text and user_text.strip():
     text = user_text.strip()
-
     save_message(st.session_state.conv_id, st.session_state.user, "user", text)
-    rename_conversation_if_default(st.session_state.conv_id, text[:40])
+    rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
 
-    history = [{"role":"system", "content":"You are Nexa, a helpful assistant."}]
+    history = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
     for m in load_messages(st.session_state.conv_id):
         history.append({"role": m["role"], "content": m["content"]})
 
-    with st.spinner("Nexa thinking..."):
+    with st.spinner("Nexa is thinking..."):
         reply = call_openrouter(history)
-
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+
+    # TTS if enabled
+    if st.session_state.get("speak_on_reply", False):
+        safe = html.escape(reply).replace("\n", " ")
+        tts = f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
+        components.html(tts, height=0)
+
     st.rerun()
 
-st.markdown('</div></div></div></div></div>', unsafe_allow_html=True)
+# close main chat area divs
+st.markdown("</div></div>", unsafe_allow_html=True)
