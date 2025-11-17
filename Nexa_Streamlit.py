@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# Fixed — simple UI, visible at top (no big blank space), working sidebar, mic, DB, LLM wrapper, st.rerun used.
+# Final combined — fixed submit button error (single form), sidebar, mic, DB, LLM wrapper, st.rerun used.
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 from pathlib import Path
@@ -137,10 +137,9 @@ def call_openrouter(messages):
 st.markdown(
     """
     <style>
-      /* ensure content begins near top and is simple */
       .stApp { background: #0b1113; color: #e6f6ff; }
-      header { display:none; } /* optional: hide top header to keep UI compact */
-      .main > div { padding-top: 6px; } /* small top padding */
+      header { display:none; }
+      .main > div { padding-top: 6px; }
       .msg-user { background:#14a37f; color:#001b12; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-left:auto;}
       .msg-ai { background:#07101a; color:#dff5ee; padding:10px 14px; border-radius:12px; margin:8px 0; max-width:80%; margin-right:auto;}
       .welcome-box { text-align:center; margin-top:12px; color:#cfe8ee; }
@@ -149,7 +148,7 @@ st.markdown(
       .input-row { display:flex; gap:8px; align-items:center; width:100%; }
       .input-text { flex:1; padding:8px; border-radius:8px; border:1px solid #2b3942; background: #0f1720; color:#e6f6ff; }
       .send-btn { padding:8px 12px; border-radius:8px; background:#14a37f; color:#001b12; font-weight:700; border:none; cursor:pointer; }
-      footer { visibility:hidden; } /* hide Streamlit footer for cleaner look */
+      footer { visibility:hidden; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -164,7 +163,7 @@ if "speak_on_reply" not in st.session_state:
     st.session_state.speak_on_reply = False
 
 # --------------------
-# Sidebar (use Streamlit sidebar for stability)
+# Sidebar
 # --------------------
 with st.sidebar:
     st.markdown("## 🟦 Nexa")
@@ -201,18 +200,18 @@ with st.sidebar:
         components.html("<script>window.open('https://www.google.com','_blank');</script>", height=0)
 
 # --------------------
-# Main content
+# Main content start
 # --------------------
 st.markdown("<div style='display:flex;gap:20px;align-items:flex-start;'>", unsafe_allow_html=True)
 
-# Left small visual column (keeps previous left-col feel but simple)
+# Left small visual column
 st.markdown("""
 <div style="width:84px;padding:8px;">
   <div style="width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-weight:800;">N</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Chat area
+# Chat area container
 st.markdown("<div style='flex:1;min-width:320px;'>", unsafe_allow_html=True)
 
 # Load and show messages or welcome
@@ -228,15 +227,14 @@ else:
         else:
             st.markdown(f"<div class='msg-user'>{content}</div>", unsafe_allow_html=True)
 
-# Input row with mic button and text input (keeps behaviour simple)
+# Single form (mic + input + submit) — FIXED: one form only and has submit button
 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 with st.form("nexa_input_form", clear_on_submit=True):
     cols = st.columns([0.06, 0.82, 0.12])
     with cols[0]:
-        # Mic button that triggers browser speech recognition and posts message to parent
         mic_html = r"""
         <div style="display:flex;justify-content:center;">
-          <button id="micLocal" class="mic-btn">🎤</button>
+          <button id="micLocal" class="mic-btn" title="Speak">🎤</button>
         </div>
         <script>
         (function(){
@@ -273,7 +271,6 @@ window.addEventListener('message', (ev)=>{
    input.focus();
    input.value = text;
    input.dispatchEvent(new Event('input', {bubbles:true}));
-   // find submit button in forms and click (best-effort)
    setTimeout(()=>{
      const forms = document.querySelectorAll('form');
      for(const f of forms){
@@ -300,7 +297,6 @@ if submitted and user_text and user_text.strip():
         reply = call_openrouter(history)
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    # TTS if enabled
     if st.session_state.get("speak_on_reply", False):
         safe = html.escape(reply).replace("\n", " ")
         tts = f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
@@ -308,5 +304,5 @@ if submitted and user_text and user_text.strip():
 
     st.rerun()
 
-# close main chat area divs
+# close chat area div
 st.markdown("</div></div>", unsafe_allow_html=True)
