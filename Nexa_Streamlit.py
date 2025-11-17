@@ -174,11 +174,7 @@ if "conv_id" not in st.session_state:
 # MAIN LAYOUT
 # ------------------------------------------------------------
 st.markdown('<div class="outer">', unsafe_allow_html=True)
-
-# Left column
 st.markdown('<div class="left-col">NX</div>', unsafe_allow_html=True)
-
-# Middle
 st.markdown('<div class="center-wrap"><div class="frame">', unsafe_allow_html=True)
 
 # Sidebar
@@ -218,12 +214,13 @@ else:
             st.markdown(f"<div class='msg-user'>{content}</div>", unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# MIC + INPUT FORM (ONLY ONE FORM → ERROR FIXED)
+# MIC + INPUT FORM
 # ------------------------------------------------------------
 with st.form("nexa_main_form", clear_on_submit=True):
+
     cols = st.columns([0.06, 0.82, 0.12])
 
-    # MIC BUTTON
+    # MIC
     with cols[0]:
         mic_html = """
         <button id="micBtn" class="mic-btn">🎤</button>
@@ -244,15 +241,20 @@ with st.form("nexa_main_form", clear_on_submit=True):
         """
         components.html(mic_html, height=60)
 
-    # INPUT BOX
+    # FIXED INPUT LABEL
     with cols[1]:
-        user_text = st.text_input("", placeholder="Ask Nexa...", key="nexa_input")
+        user_text = st.text_input(
+            "Message",
+            placeholder="Ask Nexa...",
+            key="nexa_input",
+            label_visibility="collapsed"
+        )
 
-    # SUBMIT BUTTON (THIS REMOVES THE WARNING)
+    # SUBMIT
     with cols[2]:
         submitted = st.form_submit_button("Send")
 
-# JS to insert mic result to input
+# Insert mic text
 components.html("""
 <script>
 window.addEventListener("message", (e)=>{
@@ -272,7 +274,7 @@ if submitted and user_text.strip():
     save_message(st.session_state.conv_id, st.session_state.user, "user", msg)
     rename_conversation_if_default(st.session_state.conv_id, msg[:40])
 
-    history = [{"role":"system", "content":"You are Nexa, a helpful assistant."}]
+    history = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
     for m in load_messages(st.session_state.conv_id):
         history.append({"role": m["role"], "content": m["content"]})
 
