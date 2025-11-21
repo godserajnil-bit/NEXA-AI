@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# FULL FINAL VERSION — FIXED: chat at bottom edge + black chat bubbles with white text
+# FINAL FIXED VERSION — quote box, bottom input, black chat bubbles, stable UI
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -112,7 +112,9 @@ def rename_conversation_if_default(cid, title):
 def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
         return f"🔒 Offline mode — {messages[-1]['content']}"
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}",
+               "Content-Type": "application/json"}
 
     try:
         res = requests.post(
@@ -158,56 +160,66 @@ if "intro_quote" not in st.session_state:
 # -------------------- CSS --------------------
 st.markdown("""
 <style>
-/* sidebar */
 [data-testid="stSidebar"] > div:first-child {
     background:black;
     color:white;
 }
 
-/* main bg */
-.reportview-container .main .block-container {
+/* main background */
+.block-container {
     background:#e6e6e6;
 }
 
-/* ===== CHAT BUBBLES FIXED ===== */
+/* CHAT BUBBLES */
 .chat-user, .chat-ai {
     background:black;
     color:white;
-    padding:12px;
-    border-radius:18px;
-    margin:8px 0;
-    max-width:75%;
+    padding:12px 16px;
+    border-radius:20px;
+    margin:10px 0;
+    max-width:70%;
+    font-size:16px;
 }
 
-/* user on right */
-.chat-user {
-    margin-left:auto;
+.chat-user { margin-left:auto; }
+.chat-ai { margin-right:auto; }
+
+/* INTRO BOX */
+#intro-box {
+    background:#f0f0f0;
+    border-radius:20px;
+    padding:30px;
+    text-align:center;
+    width:60%;
+    margin:60px auto 30px;
+    box-shadow:0 10px 20px rgba(0,0,0,0.1);
 }
 
-/* ai on left */
-.chat-ai {
-    margin-right:auto;
+#intro-logo {
+    width:80px;
+    margin-bottom:15px;
 }
 
-/* intro */
-#nexa-intro { text-align:center; margin:10px 0 20px; }
-#nexa-logo { width:70px; display:block; margin:auto;}
-#nexa-quote { font-style:italic; color:#111; }
+#intro-quote {
+    font-size:18px;
+    font-style:italic;
+    color:#111;
+}
 
-/* === FIX: INPUT BAR AT BOTTOM EDGE === */
+/* INPUT BAR FIX — BOTTOM EDGE */
 [data-testid="stForm"] {
     position: fixed;
     bottom: 0;
-    left: 24%;
+    left: 22%;
     right: 0;
     background:#e6e6e6;
-    padding: 8px 18px 16px;
+    padding: 10px 20px 15px;
     border-top: 1px solid #ccc;
     z-index: 999;
 }
 
-/* margin so messages not hidden behind input */
-.main {
+/* Prevent covering messages */
+.block-container {
     padding-bottom: 140px;
 }
 </style>
@@ -216,7 +228,6 @@ st.markdown("""
 # -------------------- SIDEBAR --------------------
 with st.sidebar:
     st.header("Nexa")
-
     st.text_input("Your name", st.session_state.user, key="username")
     st.session_state.user = st.session_state.username
 
@@ -233,7 +244,7 @@ with st.sidebar:
         st.session_state.intro_quote = get_random_quote()
         st.rerun()
 
-    if st.button("🧹 Reset All"):
+    if st.button("🧹 Reset"):
         reset_db()
         st.session_state.conv_id = create_conversation(st.session_state.user)
         st.session_state.show_intro = True
@@ -242,75 +253,47 @@ with st.sidebar:
 
     st.checkbox("🔊 Speak Replies", key="tts")
 
-    if st.button("Open YouTube"):
-        components.html("<script>window.open('https://youtube.com','_blank')</script>")
-    if st.button("Open Google"):
-        components.html("<script>window.open('https://google.com','_blank')</script>")
-
-# -------------------- INTRO --------------------
+# -------------------- INTRO SCREEN --------------------
 if st.session_state.show_intro:
-    if os.path.exists(LOGO_PATH):
-        st.markdown(f"""
-        <div id="nexa-intro">
-            <img id="nexa-logo" src="file://{LOGO_PATH}">
-            <div id="nexa-quote">{html.escape(st.session_state.intro_quote)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div id="nexa-intro">
-            <h2>NEXA</h2>
-            <div id="nexa-quote">{html.escape(st.session_state.intro_quote)}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f"""
+    <div id="intro-box">
+        <img id="intro-logo" src="file://{LOGO_PATH}">
+        <div id="intro-quote">{html.escape(st.session_state.intro_quote)}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# -------------------- CHAT MESSAGES --------------------
+# -------------------- MESSAGES --------------------
 for m in load_messages(st.session_state.conv_id):
     if m["role"] == "assistant":
         st.markdown(f"<div class='chat-ai'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='chat-user'>{html.escape(m['content'])}</div>", unsafe_allow_html=True)
 
-# -------------------- INPUT + MIC --------------------
+# -------------------- INPUT --------------------
 with st.form("nexa_form", clear_on_submit=True):
-    cols = st.columns([0.1, 0.75, 0.15])
+    cols = st.columns([0.85, 0.15])
 
     with cols[0]:
-        components.html("""
-        <button onclick="startRec()" style="width:40px;height:40px;border-radius:50%">🎤</button>
-        <script>
-        const rec=new(window.SpeechRecognition||webkitSpeechRecognition)();
-        rec.lang='en-US';
-        function startRec(){ rec.start(); }
-        rec.onresult=e=>{
-            const t=e.results[0][0].transcript;
-            const i=parent.document.querySelector('input[type=text]');
-            if(i){ i.value=t; i.dispatchEvent(new Event('input',{bubbles:true})); }
-        }
-        </script>
-        """,height=50)
+        message = st.text_input("Message", placeholder="Ask Nexa...", label_visibility="collapsed")
 
     with cols[1]:
-        message = st.text_input("",placeholder="Ask Nexa...")
-
-    with cols[2]:
         sent = st.form_submit_button("Send")
 
-# hide intro when typing
+# -------------------- HIDE INTRO WHEN TYPING --------------------
 components.html("""
 <script>
 let input = parent.document.querySelector('input[type=text]');
 if(input){
  input.addEventListener('input',()=>{
-   let i = parent.document.getElementById('nexa-intro');
-   if(i) i.style.display="none";
+   let box = parent.document.getElementById('intro-box');
+   if(box) box.style.display="none";
  });
 }
 </script>
-""",height=0)
+""", height=0)
 
 # -------------------- SEND HANDLER --------------------
-if sent and message.strip()!="":
+if sent and message.strip():
     st.session_state.show_intro = False
 
     save_message(st.session_state.conv_id, st.session_state.user, "user", message)
