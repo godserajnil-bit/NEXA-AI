@@ -1,5 +1,5 @@
 # Nexa_Streamlit.py
-# FINAL FIXED VERSION — quote box, bottom input, black chat bubbles, stable UI
+# FINAL FIXED VERSION — Quote + Centered Chat + Fixed New Chat + History + Clean UI
 
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -23,7 +23,8 @@ DB_PATH = "nexa.db"
 MODEL = os.getenv("NEXA_MODEL", "gpt-3.5-turbo")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-LOGO_PATH = "/mnt/data/Screenshot (8).png"
+# ✅ FIXED LIVE LOGO URL (NO MORE BROKEN IMAGE)
+LOGO_PATH = "https://i.ibb.co/YTtR3hQ/nexa-logo.png"
 
 # -------------------- DATABASE --------------------
 def get_conn():
@@ -113,8 +114,10 @@ def call_openrouter(messages):
     if not OPENROUTER_API_KEY:
         return f"🔒 Offline mode — {messages[-1]['content']}"
 
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}",
-               "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
     try:
         res = requests.post(
@@ -165,9 +168,10 @@ st.markdown("""
     color:white;
 }
 
-/* main background */
-.block-container {
-    background:#e6e6e6;
+/* CENTER MAIN CHAT AREA LIKE CHATGPT */
+.main .block-container {
+    max-width:900px;
+    margin:auto;
 }
 
 /* CHAT BUBBLES */
@@ -190,7 +194,7 @@ st.markdown("""
     border-radius:20px;
     padding:30px;
     text-align:center;
-    width:60%;
+    width:100%;
     margin:60px auto 30px;
     box-shadow:0 10px 20px rgba(0,0,0,0.1);
 }
@@ -257,7 +261,7 @@ with st.sidebar:
 if st.session_state.show_intro:
     st.markdown(f"""
     <div id="intro-box">
-        <img id="intro-logo" src="file://{LOGO_PATH}">
+        <img id="intro-logo" src="{LOGO_PATH}">
         <div id="intro-quote">{html.escape(st.session_state.intro_quote)}</div>
     </div>
     """, unsafe_allow_html=True)
