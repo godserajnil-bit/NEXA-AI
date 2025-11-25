@@ -4,6 +4,8 @@ import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
 import streamlit as st
 import streamlit.components.v1 as components
+import base64
+from PIL import Image
 
 # --------------------
 # UTF-8 I/O safe
@@ -344,6 +346,14 @@ st.markdown("</div>", unsafe_allow_html=True)  # end main container wrapper
 with st.form("nexa_input_form", clear_on_submit=True):
     cols = st.columns([0.06, 0.82, 0.12])
     with cols[0]:
+        uploaded_image = st.file_uploader(
+            "",
+            type=["png", "jpg", "jpeg", "webp"],
+            accept_multiple_files=False,
+            key="nexa_image",
+            label_visibility="collapsed"
+        )
+
         # Mic button — posts transcript back to Streamlit via parent message
         mic_html = r"""
         <div style="display:flex;justify-content:center;">
@@ -414,35 +424,86 @@ window.addEventListener('message', (ev)=>{
 # --------------------
 # Handle submit server-side (store message, call LLM, TTS optional)
 # --------------------
-if submitted and user_text and user_text.strip():
+if submitted and ((user_text and user_text.strip()) or uploaded_image):
 
-    text = user_text.strip()
+    text = user_text.strip() if user_text else ""
 
-    # Save user message
-    save_message(st.session_state.conv_id, st.session_state.user, "user", text)
+    # ---------- IMAGE HANDLING ----------
+    image_bytes = None
+
+    if uploaded_image:
+        image_bytes = uploaded_image.getvalue()
+
+        # Show image in chat
+        st.image(image_bytes, caption="You sent", use_column_width=True)
+
+    # ---------- SAVE USER MESSAGE ----------
+    if uploaded_image:
+        save_message(
+            st.session_state.conv_id,
+            st.session_state.user,
+            "user",
+            text if text else "[Image sent]",
+            image=image_bytes
+        )
+    else:
+        save_message(
+            st.session_state.conv_id,
+            st.session_state.user,
+            "user",
+            text
+        )
 
     # Rename conversation if default
-    rename_conversation_if_default(
-        st.session_state.conv_id,
-        text.split("\n", 1)[0][:40]
-    )
+    if text:
+        rename_conversation_if_default(
+            st.session_state.conv_id,
+            text.split("\n", 1)[0][:40]
+        )
 
     # Hide intro
     st.session_state.show_intro = False
 
-    # Build history for AI
-    history = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
-    for m in load_messages(st.session_state.conv_id):
-        history.append({"role": m["role"], "content": m["content"]})
+    # ---------- BUILD HISTORY ----------
+    history = [
+        {"role": "system", "content": "You are Nexa, a helpful assistant that can see and understand images."}
+    ]
 
-    # Call AI
-    with st.spinner("Nexa is thinking..."):
+    for m in load_messages(st.session_state.conv_id):
+
+        if m.get("image"):  # Image + text
+            import base64
+            img_b64 = base64.b64encode(m["image"]).decode()
+
+            history.append({
+                "role": m["role"],
+                "content": [
+                    {"type": "text", "text": m["content"]},
+                    {
+                        "type": "image_url",
+                        "image_url": f"data:image/png;base64,{img_b64}"
+                    }
+                ]
+            })
+        else:
+            history.append({
+                "role": m["role"],
+                "content": m["content"]
+            })
+
+    # ---------- CALL AI ----------
+    with st.spinner("Nexa is analyzing the image..."):
         reply = call_openrouter(history)
 
-    # Save AI reply
-    save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
+    # ---------- SAVE AI REPLY ----------
+    save_message(
+        st.session_state.conv_id,
+        "Nexa",
+        "assistant",
+        reply
+    )
 
-    # Optional TTS
+    # ---------- OPTIONAL TTS ----------
     if st.session_state.get("speak_on_reply", False):
         safe = html.escape(reply).replace("\n", " ")
         tts_script = f"""
@@ -455,7 +516,6 @@ if submitted and user_text and user_text.strip():
         """
         components.html(tts_script, height=0)
 
-    # Refresh UI
     st.rerun()
 
 # End — keep code intact, DB persists history across refreshes
