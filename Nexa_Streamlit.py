@@ -142,6 +142,22 @@ def get_random_quote():
         pass
     return "Believe in yourself and all that you are."
 
+
+# ✅ ADD THIS DIRECTLY BELOW ⬇️
+def get_real_time_answer(query):
+    try:
+        url = f"https://api.duckduckgo.com/?q={query}&format=json&no_redirect=1&no_html=1"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("AbstractText"):
+                return data["AbstractText"]
+            if data.get("Answer"):
+                return data["Answer"]
+    except:
+        pass
+    return None
+
 # --------------------
 # Session init for UI flags & user
 # --------------------
@@ -405,6 +421,9 @@ if submitted and user_text and user_text.strip():
     rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
     # hide intro for server rendering too
     st.session_state.show_intro = False
+
+    if prompt := st.chat_input("Ask Nexa..."):
+    save_message(st.session_state.conv_id, "User", "user", prompt)
 
     # build history payload
     history = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
