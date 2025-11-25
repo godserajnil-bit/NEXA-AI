@@ -179,17 +179,18 @@ if "intro_quote" not in st.session_state:
 # --------------------
 st.markdown("""
 <style>
-/* Sidebar background black */
+/* Sidebar background */
 [data-testid="stSidebar"] > div:first-child {
   background-color: #000000;
   color: #ffffff;
 }
 
-/* Main background light grey */
-.reportview-container .main .block-container {
-  background: #e6e6e6;
+/* Main background */
+.main {
+  background: #e6e6e6 !important;
 }
 
+/* ===== CHAT BUBBLES ===== */
 .chat-user, .chat-ai {
     background: #000000;
     color: #ffffff;
@@ -201,56 +202,115 @@ st.markdown("""
     font-size: 15px;
 }
 
-.chat-user {
-    margin-left: auto;
+.chat-user { margin-left: auto; }
+.chat-ai { margin-right: auto; }
+
+/* ===== INTRO ===== */
+#nexa-intro { 
+  text-align:center; 
+  margin-top:6px; 
+  margin-bottom:14px; 
+}
+#nexa-logo { 
+  width:72px; 
+  height:auto; 
+  display:block; 
+  margin:0 auto 8px auto; 
+}
+#nexa-quote { 
+  color:#333; 
+  font-style:italic; 
 }
 
-.chat-ai {
-    margin-right: auto;
+/* ===== TEXT INPUT ===== */
+.stTextInput > div > div > input {
+  background: #000 !important;
+  color: #fff !important;
+  border-radius: 100px !important;
+  padding: 12px 18px !important;
+  border: 1px solid #222 !important;
 }
 
-/* intro area */
-#nexa-intro { text-align:center; margin-top:6px; margin-bottom:14px; }
-#nexa-logo { width:72px; height:auto; display:block; margin:0 auto 8px auto; }
-#nexa-quote { color:#333; font-style:italic; }
+/* ===== SEND BUTTON ===== */
+.stButton > button {
+  background: #000 !important;
+  color: #fff !important;
+  border-radius: 50px !important;
+  border: 1px solid #222 !important;
+  padding: 8px 16px !important;
+}
 
-/* input rounded */
-input[data-testid="stTextInput"] { border-radius:24px !important; padding:10px !important; }
-
-/* -------- CHAT INPUT BAR AT BOTTOM -------- */
+/* ===== FLOATING NEXA PLUS BAR ===== */
 form[data-testid="stForm"] {
   position: fixed;
-  bottom: 0;
-  left: 22%;        /* space for sidebar */
-  right: 0;
-  background: transparent;
-  padding: 14px 24px;
+  bottom: 22px;
+  left: 55%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 10px;
   z-index: 9999;
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(0,0,0,0.25);
+  border: 2px solid #000;
 }
 
-/* prevent messages getting hidden behind the input */
+/* Keep chat above bar */
 .block-container {
   padding-bottom: 140px !important;
 }
 
-/* input box styling */
-.stTextInput > div > div > input {
-  background: #000 !important;
-  color: #fff !important;
-  border-radius: 24px !important;
-  padding: 12px 16px !important;
-  border: 1px solid #222 !important;
+/* Completely hide text input */
+form[data-testid="stForm"] textarea {
+  display: none !important;
 }
 
-/* send button styling */
-.stButton > button {
-  background: #000 !important;
-  color: #fff !important;
-  border-radius: 18px !important;
-  border: 1px solid #222 !important;
+/* Hide default drag-drop uploader */
+section[data-testid="stFileUploaderDropzone"] {
+  display: none !important;
 }
 
-</style>
+/* Plus button only */
+form[data-testid="stForm"] label {
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  width: 55px;
+  height: 55px;
+  background: black;
+  color: white;
+  font-size: 32px;
+  font-weight: bold;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+form[data-testid="stForm"] label::after {
+  content: "+";
+}
+
+/* Hover effect */
+form[data-testid="stForm"] label:hover {
+  box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
+  transform: scale(1.05);
+}
+
+/* Hide file name text ONLY inside Nexa form */
+form[data-testid="stForm"] label > div {
+  display: none !important;
+}
+
+/* Remove extra invisible space & keep only plus */
+form[data-testid="stForm"] > div {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Make sure only + circle visible */
+form[data-testid="stForm"] button {
+  display: none !important;
+}
+
+</style> 
 """, unsafe_allow_html=True)
 
 # --------------------
@@ -344,15 +404,17 @@ st.markdown("</div>", unsafe_allow_html=True)  # end main container wrapper
 # Mic + Input form (single form, no missing-submit warnings)
 # --------------------
 with st.form("nexa_input_form", clear_on_submit=True):
-    cols = st.columns([0.06, 0.82, 0.12])
-    with cols[0]:
-        uploaded_image = st.file_uploader(
-            "",
-            type=["png", "jpg", "jpeg", "webp"],
-            accept_multiple_files=False,
-            key="nexa_image",
-            label_visibility="collapsed"
-        )
+    uploaded_image = st.file_uploader(
+        "",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=False,
+        key="nexa_image",
+        label_visibility="collapsed"
+    )
+
+    user_text = ""  # remove text input, keep image only
+
+    submitted = st.form_submit_button("")
 
         # Mic button — posts transcript back to Streamlit via parent message
         mic_html = r"""
@@ -434,25 +496,20 @@ if submitted and ((user_text and user_text.strip()) or uploaded_image):
     if uploaded_image:
         image_bytes = uploaded_image.getvalue()
 
-        # Show image in chat
-        st.image(image_bytes, caption="You sent", use_column_width=True)
+        # Store image in session instead of save_message()
+        st.session_state.last_image = image_bytes
+
+        # Show image in chat properly
+        with st.chat_message("user"):
+            st.image(image_bytes, caption="You sent", use_column_width=True)
 
     # ---------- SAVE USER MESSAGE ----------
-    if uploaded_image:
-        save_message(
-            st.session_state.conv_id,
-            st.session_state.user,
-            "user",
-            text if text else "[Image sent]",
-            image=image_bytes
-        )
-    else:
-        save_message(
-            st.session_state.conv_id,
-            st.session_state.user,
-            "user",
-            text
-        )
+    save_message(
+        st.session_state.conv_id,
+        st.session_state.user,
+        "user",
+        text if text else "[Image sent]"
+    )
 
     # Rename conversation if default
     if text:
@@ -470,30 +527,36 @@ if submitted and ((user_text and user_text.strip()) or uploaded_image):
     ]
 
     for m in load_messages(st.session_state.conv_id):
+        history.append({
+            "role": m["role"],
+            "content": m["content"]
+        })
 
-        if m.get("image"):  # Image + text
-            import base64
-            img_b64 = base64.b64encode(m["image"]).decode()
+    # ---------- ADD IMAGE TO CONTEXT IF EXISTS ----------
+    if "last_image" in st.session_state and st.session_state.last_image:
 
-            history.append({
-                "role": m["role"],
-                "content": [
-                    {"type": "text", "text": m["content"]},
-                    {
-                        "type": "image_url",
-                        "image_url": f"data:image/png;base64,{img_b64}"
-                    }
-                ]
-            })
-        else:
-            history.append({
-                "role": m["role"],
-                "content": m["content"]
-            })
+        import base64
+
+        img_b64 = base64.b64encode(st.session_state.last_image).decode()
+
+        history.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text if text else "Analyze this image"},
+                {
+                    "type": "image_url",
+                    "image_url": f"data:image/png;base64,{img_b64}"
+                }
+            ]
+        })
 
     # ---------- CALL AI ----------
-    with st.spinner("Nexa is analyzing the image..."):
+    with st.spinner("Nexa is analyzing..."):
         reply = call_openrouter(history)
+
+    # ---------- DISPLAY AI MESSAGE ----------
+    with st.chat_message("assistant"):
+        st.markdown(reply)
 
     # ---------- SAVE AI REPLY ----------
     save_message(
@@ -517,5 +580,6 @@ if submitted and ((user_text and user_text.strip()) or uploaded_image):
         components.html(tts_script, height=0)
 
     st.rerun()
+
 
 # End — keep code intact, DB persists history across refreshes
