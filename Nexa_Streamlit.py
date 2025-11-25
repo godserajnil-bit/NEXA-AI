@@ -1,4 +1,4 @@
-# Nexa_Streamlit.py
+ # Nexa_Streamlit.py
 # Combined final: Nexa UI with logo+quote top-center (disappear on typing), DB, mic, LLM wrapper, sidebar black, light-grey chat
 import sys, io, os, sqlite3, requests, html
 from datetime import datetime, timezone
@@ -179,6 +179,7 @@ if "intro_quote" not in st.session_state:
 # --------------------
 st.markdown("""
 <style>
+
 /* Sidebar background */
 [data-testid="stSidebar"] > div:first-child {
   background-color: #000000;
@@ -207,19 +208,19 @@ st.markdown("""
 
 /* ===== INTRO ===== */
 #nexa-intro { 
-  text-align:center; 
-  margin-top:6px; 
-  margin-bottom:14px; 
+  text-align: center; 
+  margin-top: 6px; 
+  margin-bottom: 14px; 
 }
 #nexa-logo { 
-  width:72px; 
-  height:auto; 
-  display:block; 
-  margin:0 auto 8px auto; 
+  width: 72px; 
+  height: auto; 
+  display: block; 
+  margin: 0 auto 8px auto; 
 }
 #nexa-quote { 
-  color:#333; 
-  font-style:italic; 
+  color: #333; 
+  font-style: italic; 
 }
 
 /* ===== TEXT INPUT ===== */
@@ -231,86 +232,63 @@ st.markdown("""
   border: 1px solid #222 !important;
 }
 
-/* ===== SEND BUTTON ===== */
-.stButton > button {
-  background: #000 !important;
-  color: #fff !important;
-  border-radius: 50px !important;
-  border: 1px solid #222 !important;
-  padding: 8px 16px !important;
-}
-
-/* ===== FLOATING NEXA PLUS BAR ===== */
+/* ===== PLUS BUTTON POSITION ===== */
 form[data-testid="stForm"] {
   position: fixed;
-  bottom: 22px;
-  left: 55%;
+  bottom: 25px;
+  left: 50%;
   transform: translateX(-50%);
-  background: white;
-  padding: 10px;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
   z-index: 9999;
-  border-radius: 50%;
-  box-shadow: 0 0 15px rgba(0,0,0,0.25);
-  border: 2px solid #000;
 }
 
 /* Keep chat above bar */
 .block-container {
-  padding-bottom: 140px !important;
+  padding-bottom: 160px !important;
 }
 
-/* Completely hide text input */
-form[data-testid="stForm"] textarea {
-  display: none !important;
-}
-
-/* Hide default drag-drop uploader */
+/* Style uploader as circle */
 section[data-testid="stFileUploaderDropzone"] {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  border: 2px solid black !important;
+  background: black !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+}
+
+/* Remove Streamlit text inside */
+section[data-testid="stFileUploaderDropzone"] span {
   display: none !important;
 }
 
-/* Plus button only */
-form[data-testid="stForm"] label {
-  display: flex !important;
-  justify-content: center;
-  align-items: center;
-  width: 55px;
-  height: 55px;
-  background: black;
+/* Add + sign */
+section[data-testid="stFileUploaderDropzone"]::after {
+  content: "+";
   color: white;
   font-size: 32px;
-  font-weight: bold;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-form[data-testid="stForm"] label::after {
-  content: "+";
+  font-weight: 600;
 }
 
 /* Hover effect */
-form[data-testid="stForm"] label:hover {
+section[data-testid="stFileUploaderDropzone"]:hover {
   box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
   transform: scale(1.05);
 }
 
-/* Hide file name text ONLY inside Nexa form */
-form[data-testid="stForm"] label > div {
-  display: none !important;
-}
-
-/* Remove extra invisible space & keep only plus */
-form[data-testid="stForm"] > div {
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-/* Make sure only + circle visible */
+/* Hide submit button (but keep working) */
 form[data-testid="stForm"] button {
   display: none !important;
 }
 
-</style> 
+</style>
 """, unsafe_allow_html=True)
 
 # --------------------
@@ -411,20 +389,17 @@ with st.form("nexa_input_form", clear_on_submit=True):
         key="nexa_image",
         label_visibility="collapsed"
     )
-
     submitted = st.form_submit_button("")
-
 
 # --------------------
 # Handle submit server-side (store message, call LLM)
 # --------------------
-if submitted and uploaded_image:
+if submitted and uploaded_image is not None:
 
     text = "[Image sent]"
 
     # ---------- IMAGE HANDLING ----------
     image_bytes = uploaded_image.getvalue()
-
     st.session_state.last_image = image_bytes
 
     # Show image in chat
@@ -455,7 +430,7 @@ if submitted and uploaded_image:
 
     # ---------- ADD IMAGE ----------
     import base64
-    img_b64 = base64.b64encode(image_bytes).decode()
+    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
     history.append({
         "role": "user",
@@ -470,7 +445,10 @@ if submitted and uploaded_image:
 
     # ---------- CALL AI ----------
     with st.spinner("Nexa is analyzing..."):
-        reply = call_openrouter(history)
+        try:
+            reply = call_openrouter(history)
+        except Exception as e:
+            reply = f"⚠️ Error: {e}"
 
     # ---------- DISPLAY AI MESSAGE ----------
     with st.chat_message("assistant"):
@@ -487,17 +465,13 @@ if submitted and uploaded_image:
     # ---------- OPTIONAL TTS ----------
     if st.session_state.get("speak_on_reply", False):
         safe = html.escape(reply).replace("\n", " ")
-        tts_script = f"""
+        components.html(f"""
         <script>
         speechSynthesis.cancel();
-        speechSynthesis.speak(
-            new SpeechSynthesisUtterance('{safe}')
-        );
+        speechSynthesis.speak(new SpeechSynthesisUtterance("{safe}"));
         </script>
-        """
-        components.html(tts_script, height=0)
+        """, height=0)
 
     st.rerun()
-
 
 # End — keep code intact, DB persists history across refreshes
