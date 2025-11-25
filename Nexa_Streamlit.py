@@ -113,23 +113,26 @@ def rename_conversation_if_default(cid, new_title):
 # LLM wrapper (OpenRouter) — unchanged
 # --------------------
 def call_openrouter(messages):
-    if not OPENROUTER_API_KEY:
-        return f"🔒 Offline mode — echo: {messages[-1].get('content','')}"
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
-    try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            json={"model": MODEL, "messages": messages},
-            headers=headers,
-            timeout=60
-        )
-        r.raise_for_status()
-        data = r.json()
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0].get("message", {}).get("content", "") or ""
-        return ""
-    except Exception as e:
-        return f"⚠️ Nexa error: {e}"
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:8501",
+        "X-Title": "Nexa AI"
+    }
+
+    payload = {
+        "model": "openai/gpt-4o-mini",
+        "messages": messages,
+        "max_tokens": 500
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(response.text)
+
+    return response.json()['choices'][0]['message']['content']
 
 # --------------------
 # Quote fetch (fetch once per new session/load)
@@ -250,37 +253,29 @@ form[data-testid="stForm"] {
   padding-bottom: 160px !important;
 }
 
-/* Style uploader as circle */
-section[data-testid="stFileUploaderDropzone"] {
-  width: 56px !important;
-  height: 56px !important;
-  border-radius: 50% !important;
-  border: 2px solid black !important;
-  background: black !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  cursor: pointer !important;
-  padding: 0 !important;
-}
-
-/* Remove Streamlit text inside */
-section[data-testid="stFileUploaderDropzone"] span {
+/* COMPLETELY HIDE default uploader UI */
+section[data-testid="stFileUploaderDropzone"],
+section[data-testid="stFileUploader"] > div > div > small,
+div[data-testid="stFileUploader"] label {
   display: none !important;
 }
 
-/* Add + sign */
-section[data-testid="stFileUploaderDropzone"]::after {
-  content: "+";
-  color: white;
-  font-size: 32px;
-  font-weight: 600;
+/* Real + button UI */
+.plus-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid black;
+    background: black;
+    color: white;
+    font-size: 32px;
+    font-weight: 600;
+    cursor: pointer;
 }
 
-/* Hover effect */
-section[data-testid="stFileUploaderDropzone"]:hover {
-  box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
-  transform: scale(1.05);
+.plus-btn:hover {
+    box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
+    transform: scale(1.05);
 }
 
 /* Hide submit button (but keep working) */
