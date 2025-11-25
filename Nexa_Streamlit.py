@@ -422,7 +422,7 @@ if submitted and user_text and user_text.strip():
     # hide intro for server rendering too
     st.session_state.show_intro = False
 
-    if prompt := st.chat_input("Ask Nexa..."):
+   if prompt := st.chat_input("Ask Nexa..."):
     save_message(st.session_state.conv_id, "User", "user", prompt)
 
     # build history payload
@@ -435,13 +435,11 @@ if submitted and user_text and user_text.strip():
 
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
-    # optional: browser TTS if enabled
     if st.session_state.get("speak_on_reply", False):
         safe = html.escape(reply).replace("\n", " ")
         tts_script = f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
         components.html(tts_script, height=0)
 
-    # rerun so UI shows new messages and intro hidden
     st.rerun()
 
 # End — keep code intact, DB persists history across refreshes
