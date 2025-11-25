@@ -172,9 +172,24 @@ st.markdown("""
   background: #e6e6e6;
 }
 
-/* Chat bubbles */
-.chat-user { background:#cfe3ff; padding:10px 12px; border-radius:12px; margin:8px 0; max-width:78%; margin-left:auto; }
-.chat-ai { background:#ffffff; padding:10px 12px; border-radius:12px; margin:8px 0; max-width:78%; margin-right:auto; }
+.chat-user, .chat-ai {
+    background: #000000;
+    color: #ffffff;
+    padding: 12px 14px;
+    border-radius: 14px;
+    margin: 10px 0;
+    max-width: 80%;
+    line-height: 1.4;
+    font-size: 15px;
+}
+
+.chat-user {
+    margin-left: auto;
+}
+
+.chat-ai {
+    margin-right: auto;
+}
 
 /* intro area */
 #nexa-intro { text-align:center; margin-top:6px; margin-bottom:14px; }
@@ -183,6 +198,40 @@ st.markdown("""
 
 /* input rounded */
 input[data-testid="stTextInput"] { border-radius:24px !important; padding:10px !important; }
+
+/* -------- CHAT INPUT BAR AT BOTTOM -------- */
+form[data-testid="stForm"] {
+  position: fixed;
+  bottom: 0;
+  left: 22%;        /* space for sidebar */
+  right: 0;
+  background: transparent;
+  padding: 14px 24px;
+  z-index: 9999;
+}
+
+/* prevent messages getting hidden behind the input */
+.block-container {
+  padding-bottom: 140px !important;
+}
+
+/* input box styling */
+.stTextInput > div > div > input {
+  background: #000 !important;
+  color: #fff !important;
+  border-radius: 24px !important;
+  padding: 12px 16px !important;
+  border: 1px solid #222 !important;
+}
+
+/* send button styling */
+.stButton > button {
+  background: #000 !important;
+  color: #fff !important;
+  border-radius: 18px !important;
+  border: 1px solid #222 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
