@@ -415,34 +415,47 @@ window.addEventListener('message', (ev)=>{
 # Handle submit server-side (store message, call LLM, TTS optional)
 # --------------------
 if submitted and user_text and user_text.strip():
+
     text = user_text.strip()
+
+    # Save user message
     save_message(st.session_state.conv_id, st.session_state.user, "user", text)
 
-    # rename conversation if it had default title
-    rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
+    # Rename conversation if default
+    rename_conversation_if_default(
+        st.session_state.conv_id,
+        text.split("\n", 1)[0][:40]
+    )
 
-    # hide intro for server rendering too
+    # Hide intro
     st.session_state.show_intro = False
 
-
-if prompt := st.chat_input("Ask Nexa..."):
-    save_message(st.session_state.conv_id, "User", "user", prompt)
-
-    # build history payload
-    history = [{"role":"system","content":"You are Nexa, a helpful assistant."}]
+    # Build history for AI
+    history = [{"role": "system", "content": "You are Nexa, a helpful assistant."}]
     for m in load_messages(st.session_state.conv_id):
         history.append({"role": m["role"], "content": m["content"]})
 
+    # Call AI
     with st.spinner("Nexa is thinking..."):
         reply = call_openrouter(history)
 
+    # Save AI reply
     save_message(st.session_state.conv_id, "Nexa", "assistant", reply)
 
+    # Optional TTS
     if st.session_state.get("speak_on_reply", False):
         safe = html.escape(reply).replace("\n", " ")
-        tts_script = f"<script>speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('{safe}'));</script>"
+        tts_script = f"""
+        <script>
+        speechSynthesis.cancel();
+        speechSynthesis.speak(
+            new SpeechSynthesisUtterance('{safe}')
+        );
+        </script>
+        """
         components.html(tts_script, height=0)
 
+    # Refresh UI
     st.rerun()
 
 # End — keep code intact, DB persists history across refreshes
