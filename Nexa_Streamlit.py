@@ -417,12 +417,15 @@ window.addEventListener('message', (ev)=>{
 if submitted and user_text and user_text.strip():
     text = user_text.strip()
     save_message(st.session_state.conv_id, st.session_state.user, "user", text)
+
     # rename conversation if it had default title
     rename_conversation_if_default(st.session_state.conv_id, text.split("\n",1)[0][:40])
+
     # hide intro for server rendering too
     st.session_state.show_intro = False
 
-   if prompt := st.chat_input("Ask Nexa..."):
+
+if prompt := st.chat_input("Ask Nexa..."):
     save_message(st.session_state.conv_id, "User", "user", prompt)
 
     # build history payload
