@@ -183,7 +183,7 @@ if "intro_quote" not in st.session_state:
 st.markdown("""
 <style>
 
-/* Sidebar background */
+/* Sidebar */
 [data-testid="stSidebar"] > div:first-child {
   background-color: #000000;
   color: #ffffff;
@@ -194,7 +194,7 @@ st.markdown("""
   background: #e6e6e6 !important;
 }
 
-/* ===== CHAT BUBBLES ===== */
+/* CHAT BUBBLES */
 .chat-user, .chat-ai {
     background: #000000;
     color: #ffffff;
@@ -209,33 +209,35 @@ st.markdown("""
 .chat-user { margin-left: auto; }
 .chat-ai { margin-right: auto; }
 
-/* ===== INTRO ===== */
+/* INTRO */
 #nexa-intro { 
   text-align: center; 
   margin-top: 6px; 
   margin-bottom: 14px; 
 }
+
 #nexa-logo { 
   width: 72px; 
   height: auto; 
   display: block; 
   margin: 0 auto 8px auto; 
 }
+
 #nexa-quote { 
   color: #333; 
   font-style: italic; 
 }
 
-/* ===== TEXT INPUT ===== */
+/* TEXT INPUT (FIXED FROM BLACK) */
 .stTextInput > div > div > input {
-  background: #000 !important;
-  color: #fff !important;
+  background: #f4f4f4 !important;
+  color: #000 !important;
   border-radius: 100px !important;
   padding: 12px 18px !important;
-  border: 1px solid #222 !important;
+  border: 1px solid #ccc !important;
 }
 
-/* ===== PLUS BUTTON POSITION ===== */
+/* FORM POSITION */
 form[data-testid="stForm"] {
   position: fixed;
   bottom: 25px;
@@ -248,37 +250,46 @@ form[data-testid="stForm"] {
   z-index: 9999;
 }
 
-/* Keep chat above bar */
+/* Keep space above bar */
 .block-container {
   padding-bottom: 160px !important;
 }
 
-/* COMPLETELY HIDE default uploader UI */
-section[data-testid="stFileUploaderDropzone"],
-section[data-testid="stFileUploader"] > div > div > small,
-div[data-testid="stFileUploader"] label {
+/* Upload button as + */
+section[data-testid="stFileUploaderDropzone"] {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  border: 2px solid black !important;
+  background: black !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+}
+
+/* Remove ALL text */
+section[data-testid="stFileUploaderDropzone"] span,
+section[data-testid="stFileUploaderDropzone"] small {
   display: none !important;
 }
 
-/* Real + button UI */
-.plus-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: 2px solid black;
-    background: black;
-    color: white;
-    font-size: 32px;
-    font-weight: 600;
-    cursor: pointer;
+/* + icon */
+section[data-testid="stFileUploaderDropzone"]::after {
+  content: "+";
+  color: white;
+  font-size: 32px;
+  font-weight: 600;
 }
 
-.plus-btn:hover {
-    box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
-    transform: scale(1.05);
+/* Hover */
+section[data-testid="stFileUploaderDropzone"]:hover {
+  box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
+  transform: scale(1.05);
 }
 
-/* Hide submit button (but keep working) */
+/* Hide submit button */
 form[data-testid="stForm"] button {
   display: none !important;
 }
@@ -380,41 +391,47 @@ with st.form("nexa_input_form", clear_on_submit=True):
     uploaded_image = st.file_uploader(
         "",
         type=["png", "jpg", "jpeg", "webp"],
-        accept_multiple_files=False,
         key="nexa_image",
         label_visibility="collapsed"
     )
+
     submitted = st.form_submit_button("")
 
 # --------------------
 # Handle submit server-side (store message, call LLM)
 # --------------------
-if submitted and uploaded_image is not None:
+if submitted and user_input:
 
-    text = "[Image sent]"
+    # Hide intro
+    st.session_state.show_intro = False
 
-    # ---------- IMAGE HANDLING ----------
-    image_bytes = uploaded_image.getvalue()
-    st.session_state.last_image = image_bytes
+    user_text = user_input
 
-    # Show image in chat
-    with st.chat_message("user"):
-        st.image(image_bytes, caption="You sent", use_column_width=True)
+    # ---------- SHOW USER MESSAGE ----------
+    if uploaded_image is not None:
+        image_bytes = uploaded_image.getvalue()
+        st.session_state.last_image = image_bytes
+
+        with st.chat_message("user"):
+            st.image(image_bytes, caption="You sent", use_column_width=True)
+
+        user_text = "[Image + Text] " + user_input
+
+    else:
+        with st.chat_message("user"):
+            st.markdown(user_input)
 
     # ---------- SAVE USER MESSAGE ----------
     save_message(
         st.session_state.conv_id,
         st.session_state.user,
         "user",
-        text
+        user_text
     )
-
-    # Hide intro
-    st.session_state.show_intro = False
 
     # ---------- BUILD HISTORY ----------
     history = [
-        {"role": "system", "content": "You are Nexa, a helpful assistant that can see and understand images."}
+        {"role": "system", "content": "You are Nexa, a helpful assistant that can understand both text and images."}
     ]
 
     for m in load_messages(st.session_state.conv_id):
@@ -423,27 +440,27 @@ if submitted and uploaded_image is not None:
             "content": m["content"]
         })
 
-    # ---------- ADD IMAGE ----------
-    import base64
-    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    # ---------- IMAGE TO HISTORY ONLY IF EXISTS ----------
+    if uploaded_image is not None:
+        import base64
+        img_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    history.append({
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "Analyze this image"},
-            {
-                "type": "image_url",
-                "image_url": f"data:image/png;base64,{img_b64}"
-            }
-        ]
-    })
+        history.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_input},
+                {"type": "image_url", "image_url": f"data:image/png;base64,{img_b64}"}
+            ]
+        })
+    else:
+        history.append({"role": "user", "content": user_input})
 
     # ---------- CALL AI ----------
-    with st.spinner("Nexa is analyzing..."):
+    with st.spinner("Nexa is thinking..."):
         try:
             reply = call_openrouter(history)
         except Exception as e:
-            reply = f"⚠️ Error: {e}"
+            reply = f"⚠️ Nexa error: {e}"
 
     # ---------- DISPLAY AI MESSAGE ----------
     with st.chat_message("assistant"):
