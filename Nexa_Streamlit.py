@@ -401,7 +401,7 @@ else:
 st.markdown("</div>", unsafe_allow_html=True)  # end main container wrapper
 
 # --------------------
-# Mic + Input form (single form, no missing-submit warnings)
+# PLUS icon only (Image Upload Form)
 # --------------------
 with st.form("nexa_input_form", clear_on_submit=True):
     uploaded_image = st.file_uploader(
@@ -412,111 +412,32 @@ with st.form("nexa_input_form", clear_on_submit=True):
         label_visibility="collapsed"
     )
 
-    user_text = ""  # remove text input, keep image only
-
     submitted = st.form_submit_button("")
 
-        # Mic button — posts transcript back to Streamlit via parent message
-        mic_html = r"""
-        <div style="display:flex;justify-content:center;">
-          <button id="nexaMic" title="Speak" style="width:44px;height:44px;border-radius:50%;">🎤</button>
-        </div>
-        <script>
-        (function(){
-          const btn = document.getElementById('nexaMic');
-          if(!window.SpeechRecognition && !window.webkitSpeechRecognition){
-            btn.disabled = true;
-            return;
-          }
-          const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-          const rec = new SR();
-          rec.lang='en-US'; rec.interimResults=false; rec.maxAlternatives=1;
-          rec.onresult = e => {
-            const text = e.results[0][0].transcript;
-            window.parent.postMessage({type:'nexa_transcript', text:text}, '*');
-          };
-          btn.onclick = ()=>{ try{ rec.start(); setTimeout(()=>{ try{ rec.stop(); }catch(e){} },6000); }catch(e){} };
-        })();
-        </script>
-        """
-        components.html(mic_html, height=64)
-    with cols[1]:
-        user_text = st.text_input("Message", placeholder="Ask Nexa...", key="nexa_input", label_visibility="collapsed")
-    with cols[2]:
-        submitted = st.form_submit_button("Send")
-
-# JS listener to auto-fill input & auto-submit when mic posts transcript,
-# and to hide the intro (logo+quote) immediately on typing (client-side).
-components.html(r"""
-<script>
-window.addEventListener('message', (ev)=>{
-  if(!ev.data) return;
-  // mic transcript
-  if(ev.data.type === 'nexa_transcript'){
-    const text = ev.data.text || '';
-    const input = document.querySelector('input[aria-label="Message"]') || document.querySelector('input[type="text"]');
-    if(input){ input.focus(); input.value = text; input.dispatchEvent(new Event('input', {bubbles:true})); }
-    // try to click send
-    setTimeout(()=>{ 
-      const forms = document.querySelectorAll('form');
-      for(const f of forms){
-        const btn = f.querySelector('button[type="submit"], button');
-        if(btn && /send/i.test(btn.innerText || '')) { btn.click(); break; }
-      }
-    }, 200);
-  }
-});
-// hide intro on typing
-(function(){
-  const input = document.querySelector('input[aria-label="Message"]') || document.querySelector('input[type="text"]');
-  const hideIntro = ()=>{
-    try{
-      const intro = window.parent.document.getElementById('nexa-intro');
-      if(intro) intro.style.display = 'none';
-      // also inform Streamlit server by setting a hidden anchor and clicking (no server-side here)
-    }catch(e){}
-  };
-  if(input){
-    input.addEventListener('input', hideIntro);
-  }
-})();
-</script>
-""", height=0)
 
 # --------------------
-# Handle submit server-side (store message, call LLM, TTS optional)
+# Handle submit server-side (store message, call LLM)
 # --------------------
-if submitted and ((user_text and user_text.strip()) or uploaded_image):
+if submitted and uploaded_image:
 
-    text = user_text.strip() if user_text else ""
+    text = "[Image sent]"
 
     # ---------- IMAGE HANDLING ----------
-    image_bytes = None
+    image_bytes = uploaded_image.getvalue()
 
-    if uploaded_image:
-        image_bytes = uploaded_image.getvalue()
+    st.session_state.last_image = image_bytes
 
-        # Store image in session instead of save_message()
-        st.session_state.last_image = image_bytes
-
-        # Show image in chat properly
-        with st.chat_message("user"):
-            st.image(image_bytes, caption="You sent", use_column_width=True)
+    # Show image in chat
+    with st.chat_message("user"):
+        st.image(image_bytes, caption="You sent", use_column_width=True)
 
     # ---------- SAVE USER MESSAGE ----------
     save_message(
         st.session_state.conv_id,
         st.session_state.user,
         "user",
-        text if text else "[Image sent]"
+        text
     )
-
-    # Rename conversation if default
-    if text:
-        rename_conversation_if_default(
-            st.session_state.conv_id,
-            text.split("\n", 1)[0][:40]
-        )
 
     # Hide intro
     st.session_state.show_intro = False
@@ -532,23 +453,20 @@ if submitted and ((user_text and user_text.strip()) or uploaded_image):
             "content": m["content"]
         })
 
-    # ---------- ADD IMAGE TO CONTEXT IF EXISTS ----------
-    if "last_image" in st.session_state and st.session_state.last_image:
+    # ---------- ADD IMAGE ----------
+    import base64
+    img_b64 = base64.b64encode(image_bytes).decode()
 
-        import base64
-
-        img_b64 = base64.b64encode(st.session_state.last_image).decode()
-
-        history.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": text if text else "Analyze this image"},
-                {
-                    "type": "image_url",
-                    "image_url": f"data:image/png;base64,{img_b64}"
-                }
-            ]
-        })
+    history.append({
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Analyze this image"},
+            {
+                "type": "image_url",
+                "image_url": f"data:image/png;base64,{img_b64}"
+            }
+        ]
+    })
 
     # ---------- CALL AI ----------
     with st.spinner("Nexa is analyzing..."):
