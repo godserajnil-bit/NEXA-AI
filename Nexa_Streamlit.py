@@ -183,33 +183,33 @@ if "intro_quote" not in st.session_state:
 st.markdown("""
 <style>
 
-/* Sidebar */
+/* ================= SIDEBAR ================= */
 [data-testid="stSidebar"] > div:first-child {
   background-color: #000000;
   color: #ffffff;
 }
 
-/* Main background */
+/* ================= MAIN BACKGROUND ================= */
 .main {
-  background: #e6e6e6 !important;
+  background: #0e1117 !important;
 }
 
-/* CHAT BUBBLES */
+/* ================= CHAT BUBBLES ================= */
 .chat-user, .chat-ai {
-    background: #000000;
-    color: #ffffff;
-    padding: 12px 14px;
-    border-radius: 14px;
-    margin: 10px 0;
-    max-width: 80%;
-    line-height: 1.4;
-    font-size: 15px;
+  background: #000000;
+  color: #ffffff;
+  padding: 12px 14px;
+  border-radius: 14px;
+  margin: 10px 0;
+  max-width: 80%;
+  line-height: 1.4;
+  font-size: 15px;
 }
 
 .chat-user { margin-left: auto; }
 .chat-ai { margin-right: auto; }
 
-/* INTRO */
+/* ================= INTRO ================= */
 #nexa-intro { 
   text-align: center; 
   margin-top: 6px; 
@@ -224,73 +224,89 @@ st.markdown("""
 }
 
 #nexa-quote { 
-  color: #333; 
+  color: #777; 
   font-style: italic; 
 }
 
-/* TEXT INPUT (FIXED FROM BLACK) */
-.stTextInput > div > div > input {
-  background: #f4f4f4 !important;
-  color: #000 !important;
-  border-radius: 100px !important;
-  padding: 12px 18px !important;
-  border: 1px solid #ccc !important;
-}
+/* ================= CHAT INPUT (REAL FIX) ================= */
 
-/* FORM POSITION */
-form[data-testid="stForm"] {
+/* Position chat at bottom and centered */
+div[data-testid="stChatInput"] {
   position: fixed;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-  border: none !important;
+  bottom: 22px;
+  left: 270px;            /* matches sidebar */
+  right: 30px;
   z-index: 9999;
 }
 
-/* Keep space above bar */
-.block-container {
-  padding-bottom: 160px !important;
+/* Input styling */
+div[data-testid="stChatInput"] > div {
+  background: #1a1d24 !important;
+  border-radius: 18px !important;
+  border: 1px solid #2f333c !important;
 }
 
-/* Upload button as + */
+/* Input text */
+textarea {
+  color: #ffffff !important;
+  caret-color: white !important;
+  background: transparent !important;
+}
+
+/* Placeholder color */
+textarea::placeholder {
+  color: #888 !important;
+}
+
+/* Bottom space for messages */
+.block-container {
+  padding-bottom: 140px !important;
+}
+
+/* ================= FILE UPLOAD → ONLY + ICON ================= */
+
+section[data-testid="stFileUploader"],
 section[data-testid="stFileUploaderDropzone"] {
-  width: 56px !important;
-  height: 56px !important;
+  width: 52px !important;
+  height: 52px !important;
   border-radius: 50% !important;
-  border: 2px solid black !important;
-  background: black !important;
+  border: 2px solid #ffffff22 !important;
+  background: #000000 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  cursor: pointer !important;
   padding: 0 !important;
+  cursor: pointer !important;
 }
 
 /* Remove ALL text */
-section[data-testid="stFileUploaderDropzone"] span,
-section[data-testid="stFileUploaderDropzone"] small {
+section[data-testid="stFileUploader"] *,
+section[data-testid="stFileUploaderDropzone"] * {
   display: none !important;
 }
 
-/* + icon */
+/* Show + only */
 section[data-testid="stFileUploaderDropzone"]::after {
   content: "+";
-  color: white;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
+  color: white;
 }
 
-/* Hover */
-section[data-testid="stFileUploaderDropzone"]:hover {
-  box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
-  transform: scale(1.05);
+/* ================= REMOVE CRINGE TEXT ================= */
+
+/* Remove "Limit 200MB" etc */
+small, .e1b2p2ww0 {
+  display: none !important;
 }
 
-/* Hide submit button */
-form[data-testid="stForm"] button {
+/* If browse text still shows anywhere */
+span:contains("Browse") {
+  display: none !important;
+}
+
+/* ================= SEND BUTTON HIDE ================= */
+button[data-testid="stChatInputSubmitButton"] {
   display: none !important;
 }
 
