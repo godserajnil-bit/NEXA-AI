@@ -183,21 +183,21 @@ if "intro_quote" not in st.session_state:
 st.markdown("""
 <style>
 
-/* ================= SIDEBAR ================= */
+/* Sidebar background black */
 [data-testid="stSidebar"] > div:first-child {
   background-color: #000000;
   color: #ffffff;
 }
 
-/* ================= MAIN BACKGROUND ================= */
-.main {
-  background: #0e1117 !important;
+/* Main background light grey */
+.reportview-container .main .block-container {
+  background: #e6e6e6;
 }
 
-/* ================= CHAT BUBBLES ================= */
+/* CHAT BUBBLES - FIXED */
 .chat-user, .chat-ai {
-  background: #000000;
-  color: #ffffff;
+  background: #000000 !important;
+  color: #ffffff !important;
   padding: 12px 14px;
   border-radius: 14px;
   margin: 10px 0;
@@ -206,10 +206,15 @@ st.markdown("""
   font-size: 15px;
 }
 
-.chat-user { margin-left: auto; }
-.chat-ai { margin-right: auto; }
+.chat-user { 
+  margin-left: auto; 
+}
 
-/* ================= INTRO ================= */
+.chat-ai { 
+  margin-right: auto; 
+}
+
+/* INTRO */
 #nexa-intro { 
   text-align: center; 
   margin-top: 6px; 
@@ -224,89 +229,73 @@ st.markdown("""
 }
 
 #nexa-quote { 
-  color: #777; 
+  color: #333; 
   font-style: italic; 
 }
 
-/* ================= CHAT INPUT (REAL FIX) ================= */
+/* INPUT LOOK (not black) */
+.stTextInput > div > div > input {
+  background: #f4f4f4 !important;
+  color: #000 !important;
+  border-radius: 100px !important;
+  padding: 12px 18px !important;
+  border: 1px solid #ccc !important;
+}
 
-/* Position chat at bottom and centered */
-div[data-testid="stChatInput"] {
+/* MOVE CHAT BAR TO VERY BOTTOM */
+form[data-testid="stForm"] {
   position: fixed;
-  bottom: 22px;
-  left: 270px;            /* matches sidebar */
-  right: 30px;
+  bottom: 5px;     /* 👈 right on the edge */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
   z-index: 9999;
 }
 
-/* Input styling */
-div[data-testid="stChatInput"] > div {
-  background: #1a1d24 !important;
-  border-radius: 18px !important;
-  border: 1px solid #2f333c !important;
-}
-
-/* Input text */
-textarea {
-  color: #ffffff !important;
-  caret-color: white !important;
-  background: transparent !important;
-}
-
-/* Placeholder color */
-textarea::placeholder {
-  color: #888 !important;
-}
-
-/* Bottom space for messages */
+/* Keep space above chat bar */
 .block-container {
-  padding-bottom: 140px !important;
+  padding-bottom: 120px !important;
 }
 
-/* ================= FILE UPLOAD → ONLY + ICON ================= */
-
-section[data-testid="stFileUploader"],
+/* Upload button as + */
 section[data-testid="stFileUploaderDropzone"] {
-  width: 52px !important;
-  height: 52px !important;
+  width: 56px !important;
+  height: 56px !important;
   border-radius: 50% !important;
-  border: 2px solid #ffffff22 !important;
-  background: #000000 !important;
+  border: 2px solid black !important;
+  background: black !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  padding: 0 !important;
   cursor: pointer !important;
+  padding: 0 !important;
 }
 
 /* Remove ALL text */
-section[data-testid="stFileUploader"] *,
-section[data-testid="stFileUploaderDropzone"] * {
+section[data-testid="stFileUploaderDropzone"] span,
+section[data-testid="stFileUploaderDropzone"] small {
   display: none !important;
 }
 
-/* Show + only */
+/* + icon */
 section[data-testid="stFileUploaderDropzone"]::after {
   content: "+";
-  font-size: 28px;
-  font-weight: 600;
   color: white;
+  font-size: 32px;
+  font-weight: 600;
 }
 
-/* ================= REMOVE CRINGE TEXT ================= */
-
-/* Remove "Limit 200MB" etc */
-small, .e1b2p2ww0 {
-  display: none !important;
+/* Hover */
+section[data-testid="stFileUploaderDropzone"]:hover {
+  box-shadow: 0 0 0 6px rgba(0,0,0,0.12);
+  transform: scale(1.05);
 }
 
-/* If browse text still shows anywhere */
-span:contains("Browse") {
-  display: none !important;
-}
-
-/* ================= SEND BUTTON HIDE ================= */
-button[data-testid="stChatInputSubmitButton"] {
+/* Hide submit button */
+form[data-testid="stForm"] button {
   display: none !important;
 }
 
