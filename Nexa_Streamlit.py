@@ -1,6 +1,5 @@
 # =========================
-# NEXA – STUDY ONLY AI
-# Streamlit | Stable | Exam Focused | Persistent Memory
+# NEXA – STUDY ONLY AI (FINAL)
 # =========================
 
 import os, sys, io, sqlite3, requests, html
@@ -94,7 +93,7 @@ def list_conversations():
     return rows
 
 # -------------------------
-# STUDY-ONLY AI CALL
+# AI CALL
 # -------------------------
 def call_ai(history):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -109,7 +108,7 @@ def call_ai(history):
     }
     r = requests.post(url, headers=headers, json=payload)
     if r.status_code != 200:
-        return "⚠️ NEXA is unavailable right now."
+        return "⚠️ NEXA is unavailable."
     return r.json()["choices"][0]["message"]["content"]
 
 # -------------------------
@@ -118,12 +117,16 @@ def call_ai(history):
 if "cid" not in st.session_state:
     st.session_state.cid = new_conversation()
 
+if "test_mode" not in st.session_state:
+    st.session_state.test_mode = False
+
 # -------------------------
 # STYLES
 # -------------------------
 st.markdown("""
 <style>
 [data-testid="stSidebar"] > div:first-child {background:#000;color:#fff}
+.block-container{padding-bottom:150px}
 
 .chat-user,.chat-ai{
   background:#111;color:#fff;padding:12px 14px;
@@ -134,11 +137,9 @@ st.markdown("""
 
 form[data-testid="stForm"]{
   position:fixed;bottom:10px;left:50%;
-  transform:translateX(-50%);z-index:9999;
-  display:flex;gap:8px
+  transform:translateX(-50%);
+  display:flex;gap:8px;z-index:9999
 }
-
-.block-container{padding-bottom:140px}
 
 .mic-btn{
   background:black;color:white;
@@ -147,8 +148,11 @@ form[data-testid="stForm"]{
   cursor:pointer;font-size:20px
 }
 
-input[type="text"]{
-  border-radius:30px;padding:12px 16px
+.send-btn{
+  background:#4CAF50;color:white;
+  border-radius:50%;width:46px;height:46px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:18px
 }
 
 form button{display:none}
@@ -164,13 +168,30 @@ with st.sidebar:
 
     if st.button("➕ New Chat"):
         st.session_state.cid = new_conversation()
+        st.session_state.test_mode = False
         st.rerun()
 
-    st.markdown("### 📚 Exam Prep")
-    st.markdown("- MHT-CET")
-    st.markdown("- Boards")
-    st.markdown("- Numericals")
-    st.markdown("- Theory")
+    with st.expander("📚 Exam Prep", expanded=False):
+        st.markdown("### Competitive")
+        if st.button("MHT-CET"):
+            save_message(st.session_state.cid, "assistant", "MHT-CET mode activated. Ask questions.")
+        st.markdown("### Boards")
+        if st.button("10th Board"):
+            save_message(st.session_state.cid, "assistant", "10th Board mode activated.")
+        if st.button("12th Board"):
+            save_message(st.session_state.cid, "assistant", "12th Board mode activated.")
+        st.markdown("### School")
+        if st.button("5th–9th Exams"):
+            save_message(st.session_state.cid, "assistant", "School exam mode activated.")
+
+    if st.button("📝 Test Mode (AI asks questions)"):
+        st.session_state.test_mode = True
+        save_message(
+            st.session_state.cid,
+            "assistant",
+            "Test mode ON. I will ask you questions. Answer them."
+        )
+        st.rerun()
 
     st.markdown("### 🕘 History Saved")
     for c in list_conversations():
@@ -189,41 +210,49 @@ for m in load_messages(st.session_state.cid):
         st.markdown(f"<div class='chat-user'>{safe}</div>", unsafe_allow_html=True)
 
 # -------------------------
-# INPUT + MIC
+# INPUT + MIC + SEND
 # -------------------------
 with st.form("chat_form", clear_on_submit=True):
     user_input = st.text_input(
         "",
-        placeholder="Ask a study or exam question…",
+        placeholder="Ask a study question…",
         label_visibility="collapsed"
     )
 
     components.html("""
-    <div class="mic-btn" onclick="
-      const r = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      r.lang='en-IN';
-      r.onresult=e=>{document.querySelector('input').value=e.results[0][0].transcript;}
-      r.start();
-    ">🎤</div>
-    """, height=50)
+    <div style="display:flex;gap:8px">
+      <div class="mic-btn" onclick="
+        const r = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        r.lang='en-IN';
+        r.onresult=e=>{document.querySelector('input').value=e.results[0][0].transcript;}
+        r.start();
+      ">🎤</div>
+      <div class="send-btn">➤</div>
+    </div>
+    """, height=55)
 
-    submitted = st.form_submit_button("")
+    submitted = st.form_submit_button("Send")
 
 # -------------------------
-# SUBMIT LOGIC
+# LOGIC
 # -------------------------
 if submitted and user_input.strip():
     save_message(st.session_state.cid, "user", user_input)
 
-    history = [{
-        "role": "system",
-        "content": (
-            "You are NEXA, a STRICT study-only AI. "
-            "Answer ONLY academic questions related to exams, syllabus, physics, chemistry, maths. "
-            "If the question is not study-related, politely refuse."
+    if st.session_state.test_mode:
+        system_prompt = (
+            "You are NEXA in TEST MODE. "
+            "Ask one exam-level question. "
+            "After the student's answer, evaluate and give marks."
         )
-    }]
+    else:
+        system_prompt = (
+            "You are NEXA, a STRICT study-only AI. "
+            "Answer ONLY academic questions. "
+            "If not study-related, politely refuse."
+        )
 
+    history = [{"role": "system", "content": system_prompt}]
     for m in load_messages(st.session_state.cid):
         history.append({"role": m["role"], "content": m["content"]})
 
