@@ -1,5 +1,5 @@
 # =========================
-# NEXA – STUDY ONLY AI (FINAL)
+# NEXA – STUDY ONLY AI (FINAL FIXED)
 # =========================
 
 import os, sys, io, sqlite3, requests, html
@@ -104,7 +104,7 @@ def call_ai(history):
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": history,
-        "max_tokens": 500
+        "max_tokens": 600
     }
     r = requests.post(url, headers=headers, json=payload)
     if r.status_code != 200:
@@ -116,7 +116,6 @@ def call_ai(history):
 # -------------------------
 if "cid" not in st.session_state:
     st.session_state.cid = new_conversation()
-
 if "test_mode" not in st.session_state:
     st.session_state.test_mode = False
 
@@ -141,15 +140,8 @@ form[data-testid="stForm"]{
   display:flex;gap:8px;z-index:9999
 }
 
-.mic-btn{
+.mic-btn,.send-btn{
   background:black;color:white;
-  border-radius:50%;width:46px;height:46px;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;font-size:20px
-}
-
-.send-btn{
-  background:#4CAF50;color:white;
   border-radius:50%;width:46px;height:46px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;font-size:18px
@@ -171,25 +163,18 @@ with st.sidebar:
         st.session_state.test_mode = False
         st.rerun()
 
-    with st.expander("📚 Exam Prep", expanded=False):
-        st.markdown("### Competitive")
-        if st.button("MHT-CET"):
-            save_message(st.session_state.cid, "assistant", "MHT-CET mode activated. Ask questions.")
-        st.markdown("### Boards")
-        if st.button("10th Board"):
-            save_message(st.session_state.cid, "assistant", "10th Board mode activated.")
-        if st.button("12th Board"):
-            save_message(st.session_state.cid, "assistant", "12th Board mode activated.")
-        st.markdown("### School")
-        if st.button("5th–9th Exams"):
-            save_message(st.session_state.cid, "assistant", "School exam mode activated.")
+    with st.expander("📚 Exam Prep"):
+        st.button("MHT-CET")
+        st.button("10th Board")
+        st.button("12th Board")
+        st.button("5th–9th Exams")
 
     if st.button("📝 Test Mode (AI asks questions)"):
         st.session_state.test_mode = True
         save_message(
             st.session_state.cid,
             "assistant",
-            "Test mode ON. I will ask you questions. Answer them."
+            "Test mode ON. I will ask questions. Answer step by step."
         )
         st.rerun()
 
@@ -215,7 +200,7 @@ for m in load_messages(st.session_state.cid):
 with st.form("chat_form", clear_on_submit=True):
     user_input = st.text_input(
         "",
-        placeholder="Ask a study question…",
+        placeholder="Ask a study or exam question…",
         label_visibility="collapsed"
     )
 
@@ -234,7 +219,7 @@ with st.form("chat_form", clear_on_submit=True):
     submitted = st.form_submit_button("Send")
 
 # -------------------------
-# LOGIC
+# LOGIC (FIXED OUTPUT + SPINNER POSITION)
 # -------------------------
 if submitted and user_input.strip():
     save_message(st.session_state.cid, "user", user_input)
@@ -243,21 +228,24 @@ if submitted and user_input.strip():
         system_prompt = (
             "You are NEXA in TEST MODE. "
             "Ask one exam-level question. "
-            "After the student's answer, evaluate and give marks."
+            "Evaluate answers strictly. "
+            "Use ONLY plain text math (no LaTeX, no brackets)."
         )
     else:
         system_prompt = (
             "You are NEXA, a STRICT study-only AI. "
             "Answer ONLY academic questions. "
-            "If not study-related, politely refuse."
+            "Explain step-by-step using plain text math only. "
+            "DO NOT use LaTeX, symbols like \\frac, or brackets."
         )
 
     history = [{"role": "system", "content": system_prompt}]
     for m in load_messages(st.session_state.cid):
         history.append({"role": m["role"], "content": m["content"]})
 
-    with st.spinner("NEXA thinking…"):
-        reply = call_ai(history)
+    with st.chat_message("assistant"):
+        with st.spinner("NEXA thinking…"):
+            reply = call_ai(history)
 
     save_message(st.session_state.cid, "assistant", reply)
     st.rerun()
