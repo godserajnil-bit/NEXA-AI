@@ -1,5 +1,5 @@
 # =========================
-# NEXA – STUDY ONLY AI (FINAL – STABLE)
+# NEXA – STUDY ONLY AI (FINAL WITH SCORING)
 # =========================
 
 import os, sys, io, sqlite3, requests, html
@@ -35,6 +35,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +43,7 @@ def init_db():
             created_at TEXT
         )
     """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,6 +53,19 @@ def init_db():
             created_at TEXT
         )
     """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER,
+            exam_type TEXT,
+            total_questions INTEGER,
+            correct_answers INTEGER,
+            percentage REAL,
+            created_at TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -73,6 +88,7 @@ def delete_conversation(cid):
     conn = get_conn()
     c = conn.cursor()
     c.execute("DELETE FROM messages WHERE conversation_id=?", (cid,))
+    c.execute("DELETE FROM scores WHERE conversation_id=?", (cid,))
     c.execute("DELETE FROM conversations WHERE id=?", (cid,))
     conn.commit()
     conn.close()
@@ -87,6 +103,19 @@ def save_message(cid, role, content):
     )
     conn.commit()
     conn.close()
+
+def save_score(cid, exam, total_q, correct_q):
+    percentage = round((correct_q / total_q) * 100, 2)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO scores
+        (conversation_id, exam_type, total_questions, correct_answers, percentage, created_at)
+        VALUES (?,?,?,?,?,?)
+    """, (cid, exam, total_q, correct_q, percentage, datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+    conn.close()
+    return percentage
 
 def load_messages(cid):
     conn = get_conn()
@@ -135,6 +164,12 @@ if "mode" not in st.session_state:
     st.session_state.mode = "General Study"
 if "test_mode" not in st.session_state:
     st.session_state.test_mode = False
+if "question_count" not in st.session_state:
+    st.session_state.question_count = 0
+if "correct_count" not in st.session_state:
+    st.session_state.correct_count = 0
+if "max_questions" not in st.session_state:
+    st.session_state.max_questions = 10
 
 # -------------------------
 # STYLES
@@ -177,6 +212,8 @@ with st.sidebar:
         st.session_state.cid = new_conversation("General Study")
         st.session_state.mode = "General Study"
         st.session_state.test_mode = False
+        st.session_state.question_count = 0
+        st.session_state.correct_count = 0
         st.rerun()
 
     with st.expander("📚 Exam Prep"):
@@ -185,14 +222,18 @@ with st.sidebar:
                 st.session_state.cid = new_conversation(title)
                 st.session_state.mode = title
                 st.session_state.test_mode = False
+                st.session_state.question_count = 0
+                st.session_state.correct_count = 0
                 st.rerun()
 
     if st.button("📝 Test Mode"):
         st.session_state.test_mode = True
+        st.session_state.question_count = 0
+        st.session_state.correct_count = 0
         save_message(
             st.session_state.cid,
             "assistant",
-            "Test mode ON. I will ask questions. Answer clearly."
+            "Test mode ON. I will ask questions one by one."
         )
         st.rerun()
 
@@ -223,24 +264,17 @@ for m in load_messages(st.session_state.cid):
 # INPUT
 # -------------------------
 with st.form("chat_form", clear_on_submit=True):
-    user_input = st.text_input(
-        "Your message",
-        placeholder="Ask a study or exam question…"
-    )
-
+    user_input = st.text_input("Your message", placeholder="Answer or ask…")
     components.html("""
     <div class="mic-btn" onclick="
       try{
         const r = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         r.lang='en-IN';
-        r.onresult=e=>{
-          document.querySelector('input').value=e.results[0][0].transcript;
-        };
+        r.onresult=e=>{document.querySelector('input').value=e.results[0][0].transcript;}
         r.start();
-      }catch(e){alert('Mic not supported');}
+      }catch(e){}
     ">🎤</div>
     """, height=55)
-
     submitted = st.form_submit_button("Send")
 
 # -------------------------
@@ -249,15 +283,19 @@ with st.form("chat_form", clear_on_submit=True):
 if submitted and user_input.strip():
     save_message(st.session_state.cid, "user", user_input)
 
-    system_prompt = (
-        f"You are NEXA, a strict STUDY AI for {st.session_state.mode}. "
-        "Answer only academic questions. "
-        "Use plain text math only. "
-        "No LaTeX, no symbols, no brackets."
-    )
-
     if st.session_state.test_mode:
-        system_prompt += " Ask one exam question and evaluate answers."
+        system_prompt = (
+            f"You are NEXA conducting a test for {st.session_state.mode}. "
+            "Ask ONE exam-level question. "
+            "After answer, say only Correct or Incorrect and one-line reason. "
+            "Use plain text only. "
+            f"Stop after {st.session_state.max_questions} questions."
+        )
+    else:
+        system_prompt = (
+            f"You are NEXA, a strict STUDY AI for {st.session_state.mode}. "
+            "Answer academically using plain text only."
+        )
 
     history = [{"role":"system","content":system_prompt}]
     for m in load_messages(st.session_state.cid):
@@ -265,6 +303,34 @@ if submitted and user_input.strip():
 
     with st.spinner("NEXA thinking…"):
         reply = call_ai(history)
+
+    if st.session_state.test_mode:
+        st.session_state.question_count += 1
+        if "correct" in reply.lower():
+            st.session_state.correct_count += 1
+
+        if st.session_state.question_count >= st.session_state.max_questions:
+            percentage = save_score(
+                st.session_state.cid,
+                st.session_state.mode,
+                st.session_state.max_questions,
+                st.session_state.correct_count
+            )
+
+            prediction = (
+                "Very high chance" if percentage >= 85 else
+                "Good chance" if percentage >= 70 else
+                "Moderate chance" if percentage >= 55 else
+                "Low chance" if percentage >= 40 else
+                "Needs serious improvement"
+            )
+
+            reply += f"\n\nTest completed.\nScore: {percentage}%\nPrediction: {prediction}"
+
+            if st.session_state.mode == "Class 5–9":
+                reply += "\nFocus on Maths basics, General Science, Reasoning, and Data Handling."
+
+            st.session_state.test_mode = False
 
     save_message(st.session_state.cid, "assistant", reply)
     st.rerun()
