@@ -1,5 +1,5 @@
 # =========================
-# NEXA – STUDY ONLY AI (FINAL WITH SCORING)
+# NEXA – STUDY ONLY AI (FINAL WITH AUTO-SCROLL)
 # =========================
 
 import os, sys, io, sqlite3, requests, html
@@ -75,10 +75,7 @@ def new_conversation(title):
     conn = get_conn()
     c = conn.cursor()
     ts = datetime.now(timezone.utc).isoformat()
-    c.execute(
-        "INSERT INTO conversations (title, created_at) VALUES (?,?)",
-        (title, ts)
-    )
+    c.execute("INSERT INTO conversations (title, created_at) VALUES (?,?)", (title, ts))
     conn.commit()
     cid = c.lastrowid
     conn.close()
@@ -120,10 +117,7 @@ def save_score(cid, exam, total_q, correct_q):
 def load_messages(cid):
     conn = get_conn()
     c = conn.cursor()
-    c.execute(
-        "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
-        (cid,)
-    )
+    c.execute("SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id", (cid,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -177,7 +171,7 @@ if "max_questions" not in st.session_state:
 st.markdown("""
 <style>
 [data-testid="stSidebar"] > div:first-child {background:#000;color:#fff}
-.block-container{padding-bottom:140px}
+.block-container{padding-bottom:160px}
 
 .chat-user,.chat-ai{
   background:#111;color:#fff;padding:12px 14px;
@@ -189,7 +183,8 @@ st.markdown("""
 form[data-testid="stForm"]{
   position:fixed;bottom:10px;left:50%;
   transform:translateX(-50%);
-  display:flex;gap:8px;z-index:9999
+  display:flex;gap:8px;z-index:9999;
+  width:80%;
 }
 
 .mic-btn{
@@ -230,11 +225,7 @@ with st.sidebar:
         st.session_state.test_mode = True
         st.session_state.question_count = 0
         st.session_state.correct_count = 0
-        save_message(
-            st.session_state.cid,
-            "assistant",
-            "Test mode ON. I will ask questions one by one."
-        )
+        save_message(st.session_state.cid, "assistant", "Test mode ON. I will ask questions.")
         st.rerun()
 
     st.markdown("### 🕘 History")
@@ -253,18 +244,31 @@ with st.sidebar:
 # -------------------------
 # CHAT DISPLAY
 # -------------------------
-for m in load_messages(st.session_state.cid):
-    safe = html.escape(m["content"])
-    if m["role"] == "assistant":
-        st.markdown(f"<div class='chat-ai'>{safe}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='chat-user'>{safe}</div>", unsafe_allow_html=True)
+chat_box = st.container()
+
+with chat_box:
+    for m in load_messages(st.session_state.cid):
+        safe = html.escape(m["content"])
+        if m["role"] == "assistant":
+            st.markdown(f"<div class='chat-ai'>{safe}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-user'>{safe}</div>", unsafe_allow_html=True)
+
+# AUTO-SCROLL TO BOTTOM (KEY FIX)
+components.html("""
+<script>
+setTimeout(() => {
+  window.scrollTo(0, document.body.scrollHeight);
+}, 100);
+</script>
+""", height=0)
 
 # -------------------------
 # INPUT
 # -------------------------
 with st.form("chat_form", clear_on_submit=True):
-    user_input = st.text_input("Your message", placeholder="Answer or ask…")
+    user_input = st.text_input("Your message", placeholder="Answer or ask…", label_visibility="collapsed")
+
     components.html("""
     <div class="mic-btn" onclick="
       try{
@@ -275,6 +279,7 @@ with st.form("chat_form", clear_on_submit=True):
       }catch(e){}
     ">🎤</div>
     """, height=55)
+
     submitted = st.form_submit_button("Send")
 
 # -------------------------
@@ -286,10 +291,8 @@ if submitted and user_input.strip():
     if st.session_state.test_mode:
         system_prompt = (
             f"You are NEXA conducting a test for {st.session_state.mode}. "
-            "Ask ONE exam-level question. "
-            "After answer, say only Correct or Incorrect and one-line reason. "
-            "Use plain text only. "
-            f"Stop after {st.session_state.max_questions} questions."
+            "Ask one exam-level question. "
+            "After answer, say Correct or Incorrect with one-line reason only."
         )
     else:
         system_prompt = (
@@ -301,8 +304,7 @@ if submitted and user_input.strip():
     for m in load_messages(st.session_state.cid):
         history.append({"role":m["role"],"content":m["content"]})
 
-    with st.spinner("NEXA thinking…"):
-        reply = call_ai(history)
+    reply = call_ai(history)
 
     if st.session_state.test_mode:
         st.session_state.question_count += 1
@@ -316,20 +318,7 @@ if submitted and user_input.strip():
                 st.session_state.max_questions,
                 st.session_state.correct_count
             )
-
-            prediction = (
-                "Very high chance" if percentage >= 85 else
-                "Good chance" if percentage >= 70 else
-                "Moderate chance" if percentage >= 55 else
-                "Low chance" if percentage >= 40 else
-                "Needs serious improvement"
-            )
-
-            reply += f"\n\nTest completed.\nScore: {percentage}%\nPrediction: {prediction}"
-
-            if st.session_state.mode == "Class 5–9":
-                reply += "\nFocus on Maths basics, General Science, Reasoning, and Data Handling."
-
+            reply += f"\n\nTest completed.\nScore: {percentage}%"
             st.session_state.test_mode = False
 
     save_message(st.session_state.cid, "assistant", reply)
